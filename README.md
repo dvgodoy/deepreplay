@@ -1,1 +1,1 @@
-# Deep Replay - "Hyper-parameters in Action!" visualizing tool for Keras models.
+# Deep Replay - Generate visualization as in "Hyper-parameters in Action!" series!
