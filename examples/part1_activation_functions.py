@@ -54,5 +54,5 @@ sample_figure = compose_plots([fs, ph, lm, lh], 80)
 sample_figure.savefig('../part1.png', dpi=120, format='png')
 
 sample_anim = compose_animations([fs, ph, lm, lh])
-sample_anim.save(filename='part1.mp4', dpi=360, fps=5)
+sample_anim.save(filename='part1.mp4', dpi=120, fps=5)
 
