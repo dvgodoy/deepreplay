@@ -85,7 +85,7 @@ And use your ***Replay*** instance to build the visualization of your choice, sa
 fs = replay.build_feature_space(ax, layer_name='hidden')
 ```
 
-Now, you're ready to make a ***plot*** of your ***Feature Space*** in any given ***epoch***, or to ***animate*** the evolution of it during the whole training:
+Now, you're ready to make a ***plot*** of your ***Feature Space*** in any given ***epoch***, or to ***animate*** its evolution during the whole training:
 ```python
 fs.plot(epoch=60).savefig('feature_space_epoch60.png', dpi=120)
 fs.animate().save('feature_space_animation.mp4', dpi=120, fps=5)
