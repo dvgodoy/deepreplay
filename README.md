@@ -68,7 +68,7 @@ After your model finishes training, you'll end up with a HDF5 file (***hyperparm
 
 Next, it is time to feed the information to a ***Replay*** instance:
 ```python
-from deepreplay import Replay
+from deepreplay.replay import Replay
 
 replay = Replay(replay_filename='hyperparms_in_action.h5', group_name='part1')
 ```

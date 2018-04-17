@@ -1,7 +1,6 @@
 from __future__ import division
 import numpy as np
 import h5py
-import keras.backend as K
 from keras.callbacks import Callback
 
 class ReplayData(Callback):
