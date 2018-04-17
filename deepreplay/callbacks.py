@@ -37,7 +37,7 @@ class ReplayData(Callback):
                                                         for layer in self.model.layers]
         except AttributeError:
             # Python 3
-            self.group.attrs['activation_functions'] = [layer.activation.__name__ if hasattr(layer, 'activation') else ''
+            self.group.attrs['activation_functions'] = [np.string_(layer.activation.__name__) if hasattr(layer, 'activation') else ''
                                                         for layer in self.model.layers]
         self.group.create_dataset('inputs', data=self.inputs)
         self.group.create_dataset('targets', data=self.targets)

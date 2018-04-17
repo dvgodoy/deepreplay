@@ -3,9 +3,8 @@ import numpy as np
 import h5py
 import keras.backend as K
 from keras.models import load_model
-from deepreplay.callbacks import ReplayData
-from plot import build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric
-from plot import FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData
+from .plot import build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric
+from .plot import FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData
 
 TRAINING_MODE = 1
 TEST_MODE = 0
