@@ -31,8 +31,14 @@ class ReplayData(Callback):
         self.group.attrs['n_batches'] = np.ceil(self.params['samples'] / self.params['batch_size']).astype(np.int)
         self.group.attrs['n_epochs'] = self.n_epochs
         self.group.attrs['n_layers'] = len(self.model.layers)
-        self.group.attrs['activation_functions'] = [layer.activation.func_name if hasattr(layer, 'activation') else ''
-                                                    for layer in self.model.layers]
+        try:
+            # Python 2
+            self.group.attrs['activation_functions'] = [layer.activation.func_name if hasattr(layer, 'activation') else ''
+                                                        for layer in self.model.layers]
+        except AttributeError:
+            # Python 3
+            self.group.attrs['activation_functions'] = [layer.activation.__name__ if hasattr(layer, 'activation') else ''
+                                                        for layer in self.model.layers]
         self.group.create_dataset('inputs', data=self.inputs)
         self.group.create_dataset('targets', data=self.targets)
 
