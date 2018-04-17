@@ -107,6 +107,7 @@ class Basic(object):
 
     def plot(self, epoch):
         self.__class__.update(epoch - 1, self)
+        self.fig.tight_layout()
         return self.fig
 
     def animate(self, epoch_start=1, epoch_end=-1):
@@ -294,7 +295,7 @@ class LossAndMetric(Basic):
     @staticmethod
     def update(i, lm, epoch_start=0):
         epoch = i + epoch_start
-        lm.ax.set_title('{} - Epoch: {}'.format(lm.title, epoch + 1))
+        lm.ax.set_title('{} - Epoch: {}'.format(lm.title[0], epoch + 1))
 
         lm.line1.set_data(np.arange(0, epoch + 1), lm.metric[:epoch + 1])
         lm.line2.set_data(np.arange(0, epoch + 1), lm.loss[:epoch + 1])
@@ -309,7 +310,7 @@ class LossHistogram(Basic):
     def __init__(self, ax):
         super(LossHistogram, self).__init__(ax)
         self.losses = None
-        self._title = 'Distribution of Losses'
+        self._title = 'Losses'
 
     def __calc_scale(self, margin):
         loss_limits = np.array([self.losses.squeeze().min(), self.losses.squeeze().max()])
@@ -340,7 +341,7 @@ class LossHistogram(Basic):
 
         lh.ax.clear()
 
-        lh.ax.set_title('{} - Epoch: {}'.format(lh.title, epoch + 1))
+        lh.ax.set_title('{} - Epoch: {}'.format(lh.title[0], epoch + 1))
         lh.ax.set_ylim([0, lh.losses.shape[1]])
         lh.ax.set_xlabel('Loss')
         lh.ax.set_ylabel('# of Cases')

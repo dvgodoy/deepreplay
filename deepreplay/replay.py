@@ -3,6 +3,7 @@ import numpy as np
 import h5py
 import keras.backend as K
 from keras.models import load_model
+from deepreplay.callbacks import ReplayData
 from plot import build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric
 from plot import FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData
 
@@ -10,10 +11,11 @@ TRAINING_MODE = 1
 TEST_MODE = 0
 
 class Replay(object):
-    def __init__(self, replay_filename, group_name):
+    def __init__(self, replay_filename='', group_name='', model_filename=''):
         self.learning_phase = TEST_MODE
-
-        self.model = load_model('{}_model.h5'.format(group_name))
+        if model_filename == '':
+            model_filename = '{}_model.h5'.format(group_name)
+        self.model = load_model(model_filename)
         self.replay_data = h5py.File('{}'.format(replay_filename), 'r')
         self.group_name = group_name
         self.group = self.replay_data[self.group_name]
@@ -151,7 +153,7 @@ class Replay(object):
         self.prob_hist_plot = ProbabilityHistogram(ax_negative, ax_positive).load_data(self.prob_hist_data)
         return self.prob_hist_plot
 
-    def build_feature_space(self, ax, layer_name, grid_points= 1000, epoch_start=1, epoch_end=-1):
+    def build_feature_space(self, ax, layer_name, grid_points= 1000, xlim=(-1, 1), ylim=(-1, 1), epoch_start=1, epoch_end=-1):
         epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
@@ -161,9 +163,6 @@ class Replay(object):
         y = self.targets
         y_ind = y.squeeze().argsort()
         X = X.squeeze()[y_ind].reshape(X.shape)
-
-        xlim = [-1, 1]
-        ylim = [-1, 1]
 
         grid_lines = build_2d_grid(xlim, ylim)
         contour_lines = build_2d_grid(xlim, ylim, grid_points, grid_points)

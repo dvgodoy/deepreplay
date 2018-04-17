@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
 import h5py
+import keras.backend as K
 from keras.callbacks import Callback
 
 class ReplayData(Callback):
@@ -9,6 +10,7 @@ class ReplayData(Callback):
         self.handler = h5py.File('{}'.format(filename), 'a')
         self.inputs = inputs
         self.targets = targets
+        self.filename = filename
         self.group = None
         self.group_name = group_name
         self.current_epoch = -1
