@@ -92,6 +92,7 @@ fs.animate().save('feature_space_animation.mp4', dpi=120, fps=5)
 ```
 
 The results should look like this:
+
 ![Feature Space Epoch 60](/images/feature_space_epoch60.png) ![Feature Space Animation](/images/feature_space_animation.gif)
 
 ### Comments, questions, suggestions, bugs
