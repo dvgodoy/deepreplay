@@ -6,7 +6,7 @@
 
 This is an example of what you can do using ***Deep Replay***:
 
-![Part 1 - Animation](/images/art1.gif)
+![Part 1 Animation](/images/part1.gif)
 
 It contains:
  - a Keras' callback - ***ReplayData*** - which collects then necessary information, mostly the weights, during the training epochs;
@@ -92,8 +92,10 @@ fs.animate().save('feature_space_animation.mp4', dpi=120, fps=5)
 ```
 
 The results should look like this:
-![Feature Space - Epoch 60](/images/feature_space_epoch60.png') ![Feature Space - Animation](/images/feature_space_animation.gif')
+![Feature Space Epoch 60](/images/feature_space_epoch60.png') ![Feature Space Animation](/images/feature_space_animation.gif')
 
 ### Comments, questions, suggestions, bugs
 
-If you find any bugs/problems, please open an [issue](https://github.com/dvgodoy/deepreplay/issues) or submit a [pull request](https://github.com/dvgodoy/deepreplay/pulls).
+***DISCLAIMER***: this is a project ***under development***, so it is likely you'll run into bugs/problems.
+
+So, if you find any bugs/problems, please open an [issue](https://github.com/dvgodoy/deepreplay/issues) or submit a [pull request](https://github.com/dvgodoy/deepreplay/pulls).
