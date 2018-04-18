@@ -22,14 +22,15 @@ class Replay(object):
         self.targets = self.group['targets'][:]
         self.n_epochs = self.group.attrs['n_epochs']
         self.n_layers = self.group.attrs['n_layers']
+        self.model_weights = [w for layer in self.model.layers for w in layer.weights]
         self.weights = self._retrieve_weights()
-        self._get_output = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.weights,
+        self._get_output = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model_weights,
                                       outputs=[self.model.layers[-1].output])
         self._get_metrics = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.targets +
-                                              self.model.weights + self.model.sample_weights,
+                                              self.model_weights + self.model.sample_weights,
                                        outputs=[self.model.total_loss] + self.model.metrics_tensors)
         self._get_binary_crossentropy = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.targets +
-                                                          self.model.weights + self.model.sample_weights,
+                                                          self.model_weights + self.model.sample_weights,
                                                    outputs=[K.binary_crossentropy(self.model.targets[0],
                                                                                   self.model.outputs[0])])
         self.feature_space_data = None
@@ -78,7 +79,7 @@ class Replay(object):
         return metric
 
     def _make_function(self, layer):
-        return K.function(inputs=self.model.inputs + self.model.weights,
+        return K.function(inputs=self.model.inputs + self.model_weights,
                           outputs=[layer.output])
 
     def _predict_proba(self, inputs, weights):

@@ -95,7 +95,7 @@ The results should look like this:
 
 ![Feature Space Epoch 60](/images/feature_space_epoch60.png) ![Feature Space Animation](/images/feature_space_animation.gif)
 
-TIP: If you get an error message like ```MovieWriter avconv unavailable```, try ```conda install -c conda-forge ffmpeg```.
+TIP: If you get an error message regarding the ```MovieWriter```, try ```conda install -c conda-forge ffmpeg``` to install FFMPEG, the writer used to generate the animations.
 
 ### Comments, questions, suggestions, bugs
 
