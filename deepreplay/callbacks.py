@@ -4,6 +4,32 @@ import h5py
 from keras.callbacks import Callback
 
 class ReplayData(Callback):
+    """Creates an instance of a Keras Callback to collect information
+    about the training process, mostly the weights, and store them
+    in a group of a HDF5 file, together with inputs and targets passed
+    as arguments.
+
+    It also saves the Keras model itself, as an independent HDF5 file,
+    named after the group_name with '_model' appended to it.
+
+    Parameters
+    ----------
+    inputs: ndarray
+        An array with the inputs to be used during the training of the
+        model. These inputs are going to be later used to generate
+        statistics and plots.
+    targets: ndarray
+        An array with the targets to be used during the training of the
+        model. These targets are going to be later used to generate
+        statistics and plots.
+    filename: String
+        HDF5 filename to be used to store the collected information.
+        It can be an existing file, as the data will be appended to it.
+    group_name: String
+        Group inside the HDF5 file where the information is to be
+        saved. If the informed group name already exists, it will throw
+        an exception.
+    """
     def __init__(self, inputs, targets, filename, group_name):
         super(ReplayData, self).__init__()
         self.handler = h5py.File('{}'.format(filename), 'a')
@@ -13,6 +39,7 @@ class ReplayData(Callback):
         self.group = None
         self.group_name = group_name
         self.current_epoch = -1
+        self.n_epochs = 0
         return
 
     def _append_weights(self):
