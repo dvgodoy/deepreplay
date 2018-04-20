@@ -43,6 +43,8 @@ class ReplayData(Callback):
         return
 
     def _append_weights(self):
+        """Appends the weights to the corresponding layer and weight sequence inside the group, for the current epoch.
+        """
         for i, layer in enumerate(self.model.layers):
             layer_weights = layer.get_weights()
             for j, weights in enumerate(layer_weights):

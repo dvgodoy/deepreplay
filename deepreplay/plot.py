@@ -216,7 +216,7 @@ class Basic(object):
         return anim
 
 class FeatureSpace(Basic):
-    """Creates an instance of a Feature Space object to make plots
+    """Creates an instance of a FeatureSpace object to make plots
     and animations.
 
     Parameters
@@ -317,7 +317,7 @@ class FeatureSpace(Basic):
 
 
 class ProbabilityHistogram(Basic):
-    """Creates an instance of a Probability Histogram object to make
+    """Creates an instance of a ProbabilityHistogram object to make
     plots and animations.
 
     Parameters
@@ -396,7 +396,7 @@ class ProbabilityHistogram(Basic):
         return ph.line
 
 class LossAndMetric(Basic):
-    """Creates an instance of a Loss And Metric object to make plots
+    """Creates an instance of a LossAndMetric object to make plots
     and animations.
 
     Parameters
@@ -467,7 +467,7 @@ class LossAndMetric(Basic):
         return lm.line1, lm.line2
 
 class LossHistogram(Basic):
-    """Creates an instance of a Loss Histogram object to make plots
+    """Creates an instance of a LossHistogram object to make plots
     and animations.
 
     Parameters
@@ -481,6 +481,8 @@ class LossHistogram(Basic):
         self._title = 'Losses'
 
     def __calc_scale(self, margin):
+        """ Computes the bins partition for the histogram plot based on the loss range.
+        """
         loss_limits = np.array([self.losses.squeeze().min(), self.losses.squeeze().max()])
         loss_range = np.diff(loss_limits)[0]
         exponent = np.floor(np.log10(loss_range))

@@ -51,49 +51,72 @@ class Replay(object):
         by Keras at the end of each epoch.
     """
     def __init__(self, replay_filename, group_name, model_filename=''):
+        # Set learning phase to TEST
         self.learning_phase = TEST_MODE
+
+        # If not informed, defaults to '_model' suffix
         if model_filename == '':
             model_filename = '{}_model.h5'.format(group_name)
+
+        # Loads Keras model
         self.model = load_model(model_filename)
+        # Loads ReplayData file
         self.replay_data = h5py.File('{}'.format(replay_filename), 'r')
         self.group_name = group_name
         self.group = self.replay_data[self.group_name]
+
+        # Retrieves some basic information from the replay data
         self.inputs = self.group['inputs'][:]
         self.targets = self.group['targets'][:]
         self.n_epochs = self.group.attrs['n_epochs']
         self.n_layers = self.group.attrs['n_layers']
+        # Retrieves weights as a list, each element being one epoch
         self.weights = self._retrieve_weights()
 
+        # Gets Tensors for the weights in the same order as the layers
+        # Keras' model.weights returns the Tensors in a different order!
         self._model_weights = [w for layer in self.model.layers for w in layer.weights]
+
+        ### Functions
+        # Keras function to get the outputs, given inputs and weights
         self._get_output = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                       outputs=[self.model.layers[-1].output])
+        # Keras function to get the loss and metrics, given inputs, targets, weights and sample weights
         self._get_metrics = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.targets +
                                               self._model_weights + self.model.sample_weights,
                                        outputs=[self.model.total_loss] + self.model.metrics_tensors)
+        # Keras function to compute the binary cross entropy, given inputs, targets, weights and sample weights
         self._get_binary_crossentropy = K.function(inputs=[K.learning_phase()] + self.model.inputs +
                                                           self.model.targets + self._model_weights +
                                                           self.model.sample_weights,
                                                    outputs=[K.binary_crossentropy(self.model.targets[0],
                                                                                   self.model.outputs[0])])
+
+        # Attributes for the visualizations - Data
         self._feature_space_data = None
         self._loss_hist_data = None
         self._loss_and_metric_data = None
         self._prob_hist_data = None
-
+        # Attributes for the visualizations - Plot objects
         self._feature_space_plot = None
         self._loss_hist_plot = None
         self._loss_and_metric_plot = None
         self._prob_hist_plot = None
 
     def _retrieve_weights(self):
+        # Generates ranges for the number of different weight arrays in each layer
         n_weights = [range(len(self.group['layer{}'.format(l)]))
                      for l in range(self.n_layers)]
+        # Retrieves weights for each layer and sequence of weights
         weights = [np.array(self.group['layer{}'.format(l)]['weights{}'.format(w)])
                    for l, ws in enumerate(n_weights)
                    for w in ws]
         return [[w[epoch] for w in weights] for epoch in range(self.n_epochs)]
 
     def _make_function(self, layer):
+        """Creates a Keras function to return the output of the
+        `layer` argument, given inputs and weights
+        """
         return K.function(inputs=self.model.inputs + self._model_weights,
                           outputs=[layer.output])
 
@@ -121,7 +144,8 @@ class Replay(object):
         return self.group['loss'][:]
 
     def get_training_metric(self, metric_name):
-        """
+        """Returns corresponding metric as reported by Keras at the
+        end of each epoch.
 
         Parameters
         ----------
@@ -143,7 +167,8 @@ class Replay(object):
         return metric
 
     def predict_proba(self, epoch_start=1, epoch_end=-1):
-        """
+        """Generates class probability predictions for the inputs
+        samples by epoch.
 
         Parameters
         ----------
@@ -155,7 +180,8 @@ class Replay(object):
         Returns
         -------
         probas: ndarray
-            An array of shape (n_epochs, n_samples, 2)
+            An array of shape (n_epochs, n_samples, 2) of probabi-
+            lity predictions.
         """
         epoch_start -= 1
         if epoch_end == -1:
@@ -163,6 +189,7 @@ class Replay(object):
         epoch_end = min(epoch_end, self.n_epochs)
 
         probas = []
+        # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end):
             weights = self.weights[epoch]
             probas.append(self._predict_proba(self.inputs, weights)[0])
@@ -170,19 +197,26 @@ class Replay(object):
         return probas
 
     def build_loss_histogram(self, ax, epoch_start=1, epoch_end=-1):
-        """
+        """Builds a LossHistogram object to be used for plotting and
+        animating.
+        The underlying data, that is, the binary cross-entropy loss
+        per epoch and sample, can be later accessed as the second
+        element of the `loss_histogram` property.
 
         Parameters
         ----------
         ax: AxesSubplot
-
+            Subplot of a Matplotlib figure.
         epoch_start: int, optional
-
+            First epoch to consider.
         epoch_end: int, optional
+            Last epoch to consider.
 
         Returns
         -------
         loss_hist_plot: LossHistogram
+            An instance of a LossHistogram object to make plots and
+            animations.
         """
         if self.model.loss != 'binary_crossentropy':
             raise NotImplementedError("Only binary cross-entropy is supported!")
@@ -192,9 +226,12 @@ class Replay(object):
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
         binary_xentropy = []
+
+        # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end):
             weights = self.weights[epoch]
 
+            # Sample weights fixed to one!
             inputs = [self.learning_phase, self.inputs, self.targets] + weights + [np.ones(shape=self.inputs.shape[0])]
             binary_xentropy.append(self._get_binary_crossentropy(inputs=inputs)[0].squeeze())
 
@@ -205,21 +242,28 @@ class Replay(object):
         return self._loss_hist_plot
 
     def build_loss_and_metric(self, ax, metric_name, epoch_start=1, epoch_end=-1):
-        """
+        """Builds a LossAndMetric object to be used for plotting and
+        animating.
+        The underlying data, that is, the loss and metric per epoch,
+        can be later accessed as the second element of the
+        `loss_and_metric` property.
 
         Parameters
         ----------
         ax: AxesSubplot
-
+            Subplot of a Matplotlib figure.
         metric_name: String
-
+            Metric to return values for.
         epoch_start: int, optional
-
+            First epoch to consider.
         epoch_end: int, optional
+            Last epoch to consider.
 
         Returns
         -------
         loss_and_metric_plot: LossAndMetric
+            An instance of a LossAndMetric object to make plots and
+            animations.
         """
         epoch_start -= 1
         if epoch_end == -1:
@@ -227,9 +271,11 @@ class Replay(object):
         epoch_end = min(epoch_end, self.n_epochs)
 
         evaluations = []
+        # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end):
             weights = self.weights[epoch]
 
+            # Sample weights fixed to one!
             inputs = [self.learning_phase, self.inputs, self.targets] + weights + [np.ones(shape=self.inputs.shape[0])]
             evaluations.append(self._get_metrics(inputs=inputs))
 
@@ -245,21 +291,29 @@ class Replay(object):
         return self._loss_and_metric_plot
 
     def build_probability_histogram(self, ax_negative, ax_positive, epoch_start=1, epoch_end=-1):
-        """
+        """Builds a ProbabilityHistogram object to be used for plotting
+        and animating.
+        The underlying data, that is, the predicted probabilities
+        and corresponding targets per epoch and sample, can be
+        later accessed as the second element of the
+        `probability_histogram` property.
 
         Parameters
         ----------
         ax_negative: AxesSubplot
-
+            Subplot of a Matplotlib figure.
         ax_positive: AxesSubplot
-
+            Subplot of a Matplotlib figure.
         epoch_start: int, optional
-
+            First epoch to consider.
         epoch_end: int, optional
+            Last epoch to consider.
 
         Returns
         -------
         prob_hist_plot: ProbabilityHistogram
+            An instance of a ProbabilityHistogram object to make plots
+            and animations.
         """
         epoch_start -= 1
         if epoch_end == -1:
@@ -270,29 +324,39 @@ class Replay(object):
         self._prob_hist_plot = ProbabilityHistogram(ax_negative, ax_positive).load_data(self._prob_hist_data)
         return self._prob_hist_plot
 
-    def build_feature_space(self, ax, layer_name, grid_points= 1000, xlim=(-1, 1), ylim=(-1, 1), epoch_start=1,
+    def build_feature_space(self, ax, layer_name, contour_points= 1000, xlim=(-1, 1), ylim=(-1, 1), epoch_start=1,
                             epoch_end=-1):
-        """
+        """Builds a FeatureSpace object to be used for plotting and
+        animating.
+        The underlying data, that is, grid lines, inputs and contour
+        lines, before and after the transformations, as well as the
+        corresponding predictions for the contour lines, can be
+        later accessed as the second element of the `feature_space`
+        property.
 
         Parameters
         ----------
         ax: AxesSubplot
-
+            Subplot of a Matplotlib figure.
         layer_name: String
-
-        grid_points: int, optional
-
+            Layer to be used for building the space.
+        contour_points: int, optional
+            Number of points in each axis of the contour.
+            Default is 1,000.
         xlim: tuple of ints, optional
-
+            Boundaries for the X axis of the grid.
         ylim: tuple of ints, optional
-
+            Boundaries for the Y axis of the grid.
         epoch_start: int, optional
-
+            First epoch to consider.
         epoch_end: int, optional
+            Last epoch to consider.
 
         Returns
         -------
         feature_space_plot: FeatureSpace
+            An instance of a FeatureSpace object to make plots and
+            animations.
         """
         epoch_start -= 1
         if epoch_end == -1:
@@ -301,36 +365,48 @@ class Replay(object):
 
         X = self.inputs
         y = self.targets
+        # Generates an indexing to fully separate negative and positive classes
+        # It is not quite 'unshuffling', as it does not care about the order of the examples inside each class
         y_ind = y.squeeze().argsort()
         X = X.squeeze()[y_ind].reshape(X.shape)
 
+        # Builds a 2D grid and the corresponding contour coordinates
         grid_lines = build_2d_grid(xlim, ylim)
-        contour_lines = build_2d_grid(xlim, ylim, grid_points, grid_points)
+        contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
 
+        # Finds the layer by name, creates Keras functions to get its activations
         layer = self.model.get_layer(layer_name)
         get_activations = self._make_function(layer)
+        # Creates Keras function to get outputs of the last layer
         get_predictions = self._make_function(self.model.layers[-1])
 
+        # Initializes "bent" variables, that is, the results of the transformations
         bent_lines = []
         bent_inputs = []
         bent_contour_lines = []
         bent_preds = []
 
+        # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end):
             weights = self.weights[epoch]
 
+            # Transforms the grid lines
             inputs = [grid_lines.reshape(-1, 2)] + weights
             output_shape = (grid_lines.shape[:2]) + (-1,)
             bent_lines.append(get_activations(inputs=inputs)[0].reshape(output_shape))
 
+            # Transforms the inputs
             inputs = [X] + weights
             bent_inputs.append(get_activations(inputs=inputs)[0])
 
+            # Transforms the contour lines
             inputs = [contour_lines.reshape(-1, 2)] + weights
             output_shape = (contour_lines.shape[:2]) + (-1,)
             bent_contour_lines.append(get_activations(inputs=inputs)[0].reshape(output_shape))
+            # Makes predictions for each point in the contour surface
             bent_preds.append((get_predictions(inputs=inputs)[0].reshape(output_shape) > .5).astype(np.int))
 
+        # Makes lists into ndarrays and wrap them as namedtupls
         bent_lines = np.array(bent_lines)
         bent_inputs = np.array(bent_inputs)
         bent_contour_lines = np.array(bent_contour_lines)
@@ -339,5 +415,7 @@ class Replay(object):
         line_data = FeatureSpaceLines(grid=grid_lines, input=X, contour=contour_lines)
         bent_line_data = FeatureSpaceLines(grid=bent_lines, input=bent_inputs, contour=bent_contour_lines)
         self._feature_space_data = FeatureSpaceData(line=line_data, bent_line=bent_line_data, prediction=bent_preds)
+
+        # Creates a FeatureSpace plot object and load data into it
         self._feature_space_plot =  FeatureSpace(ax).load_data(self._feature_space_data)
         return self._feature_space_plot
