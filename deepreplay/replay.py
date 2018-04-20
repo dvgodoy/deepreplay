@@ -203,6 +203,8 @@ class Replay(object):
         per epoch and sample, can be later accessed as the second
         element of the `loss_histogram` property.
 
+        Only binary cross entropy loss is supported!
+
         Parameters
         ----------
         ax: AxesSubplot
@@ -298,6 +300,8 @@ class Replay(object):
         later accessed as the second element of the
         `probability_histogram` property.
 
+        Only binary classification is supported!
+
         Parameters
         ----------
         ax_negative: AxesSubplot
@@ -315,6 +319,9 @@ class Replay(object):
             An instance of a ProbabilityHistogram object to make plots
             and animations.
         """
+        if self.model.loss != 'binary_crossentropy':
+            raise NotImplementedError("Only binary cross-entropy is supported!")
+
         epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
@@ -333,6 +340,8 @@ class Replay(object):
         corresponding predictions for the contour lines, can be
         later accessed as the second element of the `feature_space`
         property.
+
+        Only layers with 2 hidden units are supported!
 
         Parameters
         ----------
@@ -358,6 +367,10 @@ class Replay(object):
             An instance of a FeatureSpace object to make plots and
             animations.
         """
+        # Finds the layer by name,
+        layer = self.model.get_layer(layer_name)
+        assert layer.units == 2, 'Only layers with 2 hidden units are supported!'
+
         epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
@@ -374,8 +387,7 @@ class Replay(object):
         grid_lines = build_2d_grid(xlim, ylim)
         contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
 
-        # Finds the layer by name, creates Keras functions to get its activations
-        layer = self.model.get_layer(layer_name)
+        # Creates Keras functions to get activations for the specified layer
         get_activations = self._make_function(layer)
         # Creates Keras function to get outputs of the last layer
         get_predictions = self._make_function(self.model.layers[-1])
