@@ -5,7 +5,7 @@ from keras.initializers import glorot_normal, normal
 
 from deepreplay.datasets.parabola import load_data
 from deepreplay.callbacks import ReplayData
-from deepreplay import Replay
+from deepreplay.replay import Replay
 from deepreplay.plot import compose_animations, compose_plots
 
 import matplotlib.pyplot as plt
