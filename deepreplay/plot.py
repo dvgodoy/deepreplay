@@ -54,7 +54,7 @@ def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
     lines = np.concatenate([lines_x0, lines_x1], axis=2)
     return lines
 
-def compose_animations(objects, epoch_start=1, epoch_end=-1, title=''):
+def compose_animations(objects, epoch_start=0, epoch_end=-1, title=''):
     """Compose a single animation from several objects associated with
     subplots of a single figure.
 
@@ -80,7 +80,6 @@ def compose_animations(objects, epoch_start=1, epoch_end=-1, title=''):
     assert len(set([obj.fig for obj in objects])) == 1
 
     fig = objects[0].fig
-    epoch_start -= 1
     if epoch_end == -1:
         epoch_end = min([obj.n_epochs for obj in objects])
 
@@ -94,14 +93,14 @@ def compose_animations(objects, epoch_start=1, epoch_end=-1, title=''):
             for ax, ax_title in zip(obj.axes, obj.title):
                 ax.set_title(ax_title)
 
-        obj.fig.suptitle('{}Epoch {}'.format(title, i + epoch_start + 1), fontsize=14)
+        obj.fig.suptitle('{}Epoch {}'.format(title, i + epoch_start), fontsize=14)
         obj.fig.tight_layout()
         obj.fig.subplots_adjust(top=0.9)
         return artists
 
     anim = animation.FuncAnimation(fig, update,
                                    fargs=(objects, epoch_start),
-                                   frames=(epoch_end - epoch_start),
+                                   frames=(epoch_end - epoch_start + 1),
                                    blit=True)
     return anim
 
@@ -186,11 +185,11 @@ class Basic(object):
         fig: figure
             Figure containing the plot.
         """
-        self.__class__._update(epoch - 1, self)
+        self.__class__._update(epoch, self)
         self.fig.tight_layout()
         return self.fig
 
-    def animate(self, epoch_start=1, epoch_end=-1):
+    def animate(self, epoch_start=0, epoch_end=-1):
         """Animates plotted data from `epoch_start` to `epoch_end`.
 
         Parameters
@@ -205,13 +204,12 @@ class Basic(object):
         anim: FuncAnimation
             Animation function for the data.
         """
-        epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
 
         anim = animation.FuncAnimation(self.fig, self.__class__._update,
                                        fargs=(self, epoch_start),
-                                       frames=(epoch_end - epoch_start),
+                                       frames=(epoch_end - epoch_start + 1),
                                        blit=True)
         return anim
 
@@ -292,7 +290,7 @@ class FeatureSpace(Basic):
     @staticmethod
     def _update(i, fs, epoch_start=0):
         epoch = i + epoch_start
-        fs.ax.set_title('Epoch: {}'.format(epoch + 1))
+        fs.ax.set_title('Epoch: {}'.format(epoch))
 
         line_coords = fs.bent_lines[epoch].transpose()
         input_coords = fs.bent_inputs[epoch].transpose()
@@ -379,14 +377,14 @@ class ProbabilityHistogram(Basic):
         for ax in (ph.ax1, ph.ax2):
             ax.clear()
 
-        ph.ax1.set_title('{} - Epoch: {}'.format(ph.title[0], epoch + 1))
+        ph.ax1.set_title('{} - Epoch: {}'.format(ph.title[0], epoch))
         ph.ax1.set_ylim([0, (ph.targets == 0).sum()])
         ph.ax1.set_xlabel('Probability')
         ph.ax1.set_ylabel('# of Cases')
         ph.ax1.hist(tn, bins=ph.bins, color='k', alpha=.4)
         ph.ax1.hist(fn, bins=ph.bins, color='r', alpha=.5)
 
-        ph.ax2.set_title('{} - Epoch: {}'.format(ph.title[1], epoch + 1))
+        ph.ax2.set_title('{} - Epoch: {}'.format(ph.title[1], epoch))
         ph.ax2.set_ylim([0, (ph.targets == 1).sum()])
         ph.ax2.set_xlabel('Probability')
         ph.ax2.set_ylabel('# of Cases')
@@ -455,7 +453,7 @@ class LossAndMetric(Basic):
     @staticmethod
     def _update(i, lm, epoch_start=0):
         epoch = i + epoch_start
-        lm.ax.set_title('{} - Epoch: {}'.format(lm.title[0], epoch + 1))
+        lm.ax.set_title('{} - Epoch: {}'.format(lm.title[0], epoch))
 
         lm.line1.set_data(np.arange(0, epoch + 1), lm.metric[:epoch + 1])
         lm.line2.set_data(np.arange(0, epoch + 1), lm.loss[:epoch + 1])
@@ -523,7 +521,7 @@ class LossHistogram(Basic):
 
         lh.ax.clear()
 
-        lh.ax.set_title('{} - Epoch: {}'.format(lh.title[0], epoch + 1))
+        lh.ax.set_title('{} - Epoch: {}'.format(lh.title[0], epoch))
         lh.ax.set_ylim([0, lh.losses.shape[1]])
         lh.ax.set_xlabel('Loss')
         lh.ax.set_ylabel('# of Cases')
