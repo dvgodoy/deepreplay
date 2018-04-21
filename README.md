@@ -95,7 +95,19 @@ The results should look like this:
 
 ![Feature Space Epoch 60](/images/feature_space_epoch60.png) ![Feature Space Animation](/images/feature_space_animation.gif)
 
-TIP: If you get an error message regarding the ```MovieWriter```, try ```conda install -c conda-forge ffmpeg``` to install FFMPEG, the writer used to generate the animations.
+***TIP***: If you get an error message regarding the ```MovieWriter```, try ```conda install -c conda-forge ffmpeg``` to install FFMPEG, the writer used to generate the animations.
+
+Alternatively, you can explicitly specify a different MovieWriter, for instance, `avconv`:
+```python
+from matplotlib import animation
+
+Writer = animation.writers['avconv']
+metadata = dict(title='Sigmoid Activation Function',
+                artist='Hyper-parameters in Action!')
+writer = Writer(fps=5, metadata=metadata)
+
+fs.animate().save('feature_space_animation.mp4', dpi=120, writer=writer)
+```
 
 ### Comments, questions, suggestions, bugs
 

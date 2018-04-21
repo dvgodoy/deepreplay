@@ -14,21 +14,68 @@ LossAndMetricData = namedtuple('LossAndMetricData', ['loss', 'metric', 'metric_n
 ProbHistogramData = namedtuple('ProbHistogramData', ['prob', 'target'])
 LossHistogramData = namedtuple('LossHistogramData', ['loss'])
 
-def build_2d_grid(xlim, ylim, xn=11, yn=1000):
-    x0s = np.linspace(*xlim, num=xn)
-    x1s = np.linspace(*ylim, num=yn)
+def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
+    """Returns a 2D grid of boundaries given by `xlim` and `ylim`,
+     composed of `n_lines` evenly spaced lines of `n_points` each.
+
+    Parameters
+    ----------
+    xlim : tuple of 2 ints
+        Boundaries for the X axis of the grid.
+    ylim : tuple of 2 ints
+        Boundaries for the Y axis of the grid.
+    n_lines : int, optional
+        Number of grid lines. Default is 11.
+        If n_lines equals n_points, the grid can be used as
+        coordinates for the surface of a contourplot.
+    n_points: int, optional
+        Number of points in each grid line. Default is 1,000.
+
+    Returns
+    -------
+    lines : ndarray
+        For the cases where n_lines is less than n_points, it
+        returns an array of shape (2 * n_lines, n_points, 2)
+        containing both vertical and horizontal lines of the grid.
+        If n_lines equals n_points, it returns an array of shape
+        (n_points, n_points, 2), containing all evenly spaced
+        points inside the grid boundaries.
+    """
+    x0s = np.linspace(*xlim, num=n_lines)
+    x1s = np.linspace(*ylim, num=n_points)
     x0, x1 = np.meshgrid(x0s, x1s)
 
     lines_x0 = np.atleast_3d(x0.transpose())
     lines_x1 = np.atleast_3d(x1.transpose())
 
-    if xn != yn:
+    if n_lines != n_points:
         lines_x0, lines_x1 = np.concatenate([lines_x0, lines_x1]), np.concatenate([lines_x1, lines_x0])
 
     lines = np.concatenate([lines_x0, lines_x1], axis=2)
     return lines
 
 def compose_animations(objects, epoch_start=1, epoch_end=-1, title=''):
+    """Compose a single animation from several objects associated with
+    subplots of a single figure.
+
+    Parameters
+    ----------
+    objects: list of plot objects
+        Plot objects returned using one of the 'build' methods of the
+        Replay class. All the corresponding subplots associated with
+        the objects must belong to the same figure.
+    epoch_start: int, optional
+        Epoch to start the animation from.
+    epoch_end: int, optional
+        Epoch to end the animation.
+    title: String, optional
+        Text to be used in the title, preceding the epoch information.
+
+    Returns
+    -------
+    anim: FuncAnimation
+        Composed animation function for all objects / subplots.
+    """
     assert len(objects) > 1
     assert len(set([obj.fig for obj in objects])) == 1
 
@@ -43,7 +90,7 @@ def compose_animations(objects, epoch_start=1, epoch_end=-1, title=''):
     def update(i, objects, epoch_start=0):
         artists = []
         for obj in objects:
-            artists += getattr(obj.__class__, 'update')(i, obj, epoch_start)
+            artists += getattr(obj.__class__, '_update')(i, obj, epoch_start)
             for ax, ax_title in zip(obj.axes, obj.title):
                 ax.set_title(ax_title)
 
@@ -59,6 +106,25 @@ def compose_animations(objects, epoch_start=1, epoch_end=-1, title=''):
     return anim
 
 def compose_plots(objects, epoch, title=''):
+    """Compose a single plot from several objects associated with
+    subplots of a single figure.
+
+    Parameters
+    ----------
+    objects: list of plot objects
+        Plot objects returned using one of the 'build' methods of the
+        Replay class. All the corresponding subplots associated with
+        the objects must belong to the same figure.
+    epoch: int
+        Epoch to use for the plotting.
+    title: String, optional
+        Text to be used in the title, preceding the epoch information.
+
+    Returns
+    -------
+    fig: figure
+        Figure which contains all subplots.
+    """
     assert len(objects) > 1
     assert len(set([obj.fig for obj in objects])) == 1
 
@@ -67,7 +133,7 @@ def compose_plots(objects, epoch, title=''):
     epoch = min(epoch, epoch_end)
 
     for obj in objects:
-        getattr(obj.__class__, 'update')(epoch - 1, obj)
+        getattr(obj.__class__, '_update')(epoch - 1, obj)
         for ax, ax_title in zip(obj.axes, obj.title):
             ax.set_title(ax_title)
 
@@ -79,6 +145,8 @@ def compose_plots(objects, epoch, title=''):
     return fig
 
 class Basic(object):
+    """Basic plot class, NOT to be instantiated directly.
+    """
     def __init__(self, ax):
         self._title = ''
         self.n_epochs = 0
@@ -102,26 +170,60 @@ class Basic(object):
         pass
 
     @staticmethod
-    def update(i, object, epoch_start=0):
+    def _update(i, object, epoch_start=0):
         pass
 
     def plot(self, epoch):
-        self.__class__.update(epoch - 1, self)
+        """Plots data at a given epoch.
+
+        Parameters
+        ----------
+        epoch: int
+            Epoch to use for the plotting.
+
+        Returns
+        -------
+        fig: figure
+            Figure containing the plot.
+        """
+        self.__class__._update(epoch - 1, self)
         self.fig.tight_layout()
         return self.fig
 
     def animate(self, epoch_start=1, epoch_end=-1):
+        """Animates plotted data from `epoch_start` to `epoch_end`.
+
+        Parameters
+        ----------
+        epoch_start: int, optional
+            Epoch to start the animation from.
+        epoch_end: int, optional
+            Epoch to end the animation.
+
+        Returns
+        -------
+        anim: FuncAnimation
+            Animation function for the data.
+        """
         epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
 
-        anim = animation.FuncAnimation(self.fig, self.__class__.update,
+        anim = animation.FuncAnimation(self.fig, self.__class__._update,
                                        fargs=(self, epoch_start),
                                        frames=(epoch_end - epoch_start),
                                        blit=True)
         return anim
 
 class FeatureSpace(Basic):
+    """Creates an instance of a FeatureSpace object to make plots
+    and animations.
+
+    Parameters
+    ----------
+    ax: AxesSubplot
+        Subplot of a Matplotlib figure.
+    """
     def __init__(self, ax):
         super(FeatureSpace, self).__init__(ax)
         self.contour = None
@@ -139,6 +241,19 @@ class FeatureSpace(Basic):
         self.points = []
 
     def load_data(self, feature_space_data):
+        """ Loads feature space data as computed in Replay class.
+
+        Parameters
+        ----------
+        feature_space_data: FeatureSpaceData
+            Namedtuple containing information about original grid
+            lines, data points and predictions.
+
+        Returns
+        -------
+        self: FeatureSpace
+            Returns the FeatureSpace instance itself.
+        """
         self.predictions = feature_space_data.prediction
         self.grid_lines, self.inputs, self.contour_lines = feature_space_data.line
         self.bent_lines, self.bent_inputs, self.bent_contour_lines = feature_space_data.bent_line
@@ -175,7 +290,7 @@ class FeatureSpace(Basic):
                               cmap=plt.cm.brg, alpha=0.3, levels=np.linspace(0, 1, 8))
 
     @staticmethod
-    def update(i, fs, epoch_start=0):
+    def _update(i, fs, epoch_start=0):
         epoch = i + epoch_start
         fs.ax.set_title('Epoch: {}'.format(epoch + 1))
 
@@ -202,6 +317,16 @@ class FeatureSpace(Basic):
 
 
 class ProbabilityHistogram(Basic):
+    """Creates an instance of a ProbabilityHistogram object to make
+    plots and animations.
+
+    Parameters
+    ----------
+    ax1: AxesSubplot
+        Subplot of a Matplotlib figure, for the negative cases.
+    ax2: AxesSubplot
+        Subplot of a Matplotlib figure, for the positive cases.
+    """
     def __init__(self, ax1, ax2):
         self._title = ('Negative Cases', 'Positive Cases')
         self.ax1 = ax1
@@ -218,6 +343,20 @@ class ProbabilityHistogram(Basic):
         return (self.ax1, self.ax2)
 
     def load_data(self, prob_histogram_data):
+        """ Loads probability histogram data as computed in Replay
+        class.
+
+        Parameters
+        ----------
+        prob_histogram_data: ProbHistogramData
+            Namedtuple containing information about classification
+            probabilities and targets.
+
+        Returns
+        -------
+        self: ProbabilityHistogram
+            Returns the ProbabilityHistogram instance itself.
+        """
         self.proba, self.targets = prob_histogram_data
 
         self.n_epochs = self.proba.shape[0]
@@ -228,7 +367,7 @@ class ProbabilityHistogram(Basic):
         pass
 
     @staticmethod
-    def update(i, ph, epoch_start=0):
+    def _update(i, ph, epoch_start=0):
         epoch = i + epoch_start
 
         correct = ((ph.proba[epoch] > .5) == ph.targets)
@@ -257,6 +396,14 @@ class ProbabilityHistogram(Basic):
         return ph.line
 
 class LossAndMetric(Basic):
+    """Creates an instance of a LossAndMetric object to make plots
+    and animations.
+
+    Parameters
+    ----------
+    ax: AxesSubplot
+        Subplot of a Matplotlib figure.
+    """
     def __init__(self, ax):
         super(LossAndMetric, self).__init__(ax)
         self.ax2 = self.ax.twinx()
@@ -268,6 +415,19 @@ class LossAndMetric(Basic):
         self.metric_name = ''
 
     def load_data(self, loss_and_metric_data):
+        """ Loads loss and metric data as computed in Replay class.
+
+        Parameters
+        ----------
+        loss_and_metric_data: LossAndMetricData
+            Namedtuple containing information about loss and a
+            given metric.
+
+        Returns
+        -------
+        self: LossAndMetric
+            Returns the LossAndMetric instance itself.
+        """
         self.loss, self.metric, self.metric_name = loss_and_metric_data
         self._title = '{} / Loss'.format(self.metric_name)
 
@@ -293,7 +453,7 @@ class LossAndMetric(Basic):
         self.ax.legend((self.line1, self.line2), (self.metric_name, 'Loss'), loc=3)
 
     @staticmethod
-    def update(i, lm, epoch_start=0):
+    def _update(i, lm, epoch_start=0):
         epoch = i + epoch_start
         lm.ax.set_title('{} - Epoch: {}'.format(lm.title[0], epoch + 1))
 
@@ -307,12 +467,22 @@ class LossAndMetric(Basic):
         return lm.line1, lm.line2
 
 class LossHistogram(Basic):
+    """Creates an instance of a LossHistogram object to make plots
+    and animations.
+
+    Parameters
+    ----------
+    ax: AxesSubplot
+        Subplot of a Matplotlib figure.
+    """
     def __init__(self, ax):
         super(LossHistogram, self).__init__(ax)
         self.losses = None
         self._title = 'Losses'
 
     def __calc_scale(self, margin):
+        """ Computes the bins partition for the histogram plot based on the loss range.
+        """
         loss_limits = np.array([self.losses.squeeze().min(), self.losses.squeeze().max()])
         loss_range = np.diff(loss_limits)[0]
         exponent = np.floor(np.log10(loss_range))
@@ -325,6 +495,18 @@ class LossHistogram(Basic):
         return loss_scale
 
     def load_data(self, loss_hist_data):
+        """ Loads loss histogram data as computed in Replay class.
+
+        Parameters
+        ----------
+        loss_hist_data: LossHistogramData
+            Namedtuple containing information about example's losses.
+
+        Returns
+        -------
+        self: LossHistogram
+            Returns the LossHistogram instance itself.
+        """
         self.losses, = loss_hist_data
         self.bins = self.__calc_scale(margin=0)
 
@@ -336,7 +518,7 @@ class LossHistogram(Basic):
         self.line = self.ax.plot([], [])
 
     @staticmethod
-    def update(i, lh, epoch_start=0):
+    def _update(i, lh, epoch_start=0):
         epoch = i + epoch_start
 
         lh.ax.clear()
