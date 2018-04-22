@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/dvgodoy/deepreplay.svg?branch=master)](https://travis-ci.org/dvgodoy/deepreplay)
+
 # Deep Replay
 
 ## Generate visualizations as in my "Hyper-parameters in Action!" series of posts!
