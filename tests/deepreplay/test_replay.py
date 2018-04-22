@@ -3,8 +3,6 @@ import pytest
 import numpy as np
 import numpy.testing as npt
 import matplotlib.pyplot as plt
-from deepreplay.plot import build_2d_grid
-from keras.models import Model
 
 FIXTURE_DIR = os.path.join(os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], 'rawdata')
 
@@ -79,6 +77,9 @@ def test_build_loss_histogram(replay, epoch_models):
     npt.assert_allclose(actual_loss, expected_loss, atol=1e-5)
 
 def test_build_feature_space(replay, epoch_models):
+    from deepreplay.plot import build_2d_grid
+    from keras.models import Model
+
     contour_points = 30
     _, ax = plt.subplots(1, 1)
     replay.build_feature_space(ax, 'hidden', contour_points=contour_points, epoch_start=2, epoch_end=19)
