@@ -76,8 +76,8 @@ def compose_animations(objects, epoch_start=0, epoch_end=-1, title=''):
     anim: FuncAnimation
         Composed animation function for all objects / subplots.
     """
-    assert len(objects) > 1
-    assert len(set([obj.fig for obj in objects])) == 1
+    assert len(objects) > 1, 'Cannot compose using a single plot!'
+    assert len(set([obj.fig for obj in objects])) == 1, 'All plots must belong to the same figure!'
 
     fig = objects[0].fig
     if epoch_end == -1:
@@ -100,7 +100,7 @@ def compose_animations(objects, epoch_start=0, epoch_end=-1, title=''):
 
     anim = animation.FuncAnimation(fig, update,
                                    fargs=(objects, epoch_start),
-                                   frames=(epoch_end - epoch_start + 1),
+                                   frames=(epoch_end - epoch_start),
                                    blit=True)
     return anim
 
@@ -124,8 +124,8 @@ def compose_plots(objects, epoch, title=''):
     fig: figure
         Figure which contains all subplots.
     """
-    assert len(objects) > 1
-    assert len(set([obj.fig for obj in objects])) == 1
+    assert len(objects) > 1, 'Cannot compose using a single plot!'
+    assert len(set([obj.fig for obj in objects])) == 1, 'All plots must belong to the same figure!'
 
     fig = objects[0].fig
     epoch_end = min([obj.n_epochs for obj in objects])
@@ -209,7 +209,7 @@ class Basic(object):
 
         anim = animation.FuncAnimation(self.fig, self.__class__._update,
                                        fargs=(self, epoch_start),
-                                       frames=(epoch_end - epoch_start + 1),
+                                       frames=(epoch_end - epoch_start),
                                        blit=True)
         return anim
 
@@ -221,9 +221,13 @@ class FeatureSpace(Basic):
     ----------
     ax: AxesSubplot
         Subplot of a Matplotlib figure.
+    scaled_fixed: boolean, optional
+        If True, axis scales are fixed to the maximum from beginning.
+        Default is True.
     """
-    def __init__(self, ax):
+    def __init__(self, ax, scale_fixed=True):
         super(FeatureSpace, self).__init__(ax)
+        self.scale_fixed = scale_fixed
         self.contour = None
         self.bent_inputs = None
         self.bent_lines = None
@@ -265,10 +269,11 @@ class FeatureSpace(Basic):
         return self
 
     def _prepare_plot(self):
-        xlim = [self.bent_lines[:, :, :, 0].min(), self.bent_lines[:, :, :, 0].max()]
-        ylim = [self.bent_lines[:, :, :, 1].min(), self.bent_lines[:, :, :, 1].max()]
-        self.ax.set_xlim(xlim)
-        self.ax.set_ylim(ylim)
+        if self.scale_fixed:
+            xlim = [self.bent_lines[:, :, :, 0].min(), self.bent_lines[:, :, :, 0].max()]
+            ylim = [self.bent_lines[:, :, :, 1].min(), self.bent_lines[:, :, :, 1].max()]
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
 
         self.ax.set_xlabel(r"$x_1$", fontsize=14)
         self.ax.set_ylabel(r"$x_2$", fontsize=14, rotation=0)
@@ -291,6 +296,11 @@ class FeatureSpace(Basic):
     def _update(i, fs, epoch_start=0):
         epoch = i + epoch_start
         fs.ax.set_title('Epoch: {}'.format(epoch))
+        if not fs.scale_fixed:
+            xlim = [fs.bent_lines[epoch, :, :, 0].min(), fs.bent_lines[epoch, :, :, 0].max()]
+            ylim = [fs.bent_lines[epoch, :, :, 1].min(), fs.bent_lines[epoch, :, :, 1].max()]
+            fs.ax.set_xlim(xlim)
+            fs.ax.set_ylim(ylim)
 
         line_coords = fs.bent_lines[epoch].transpose()
         input_coords = fs.bent_inputs[epoch].transpose()
@@ -307,9 +317,9 @@ class FeatureSpace(Basic):
             c.remove()  # removes only the contours, leaves the rest intact
 
         fs.contour = fs.ax.contourf(fs.bent_contour_lines[epoch, :, :, 0],
-                              fs.bent_contour_lines[epoch, :, :, 1],
-                              fs.predictions[epoch].squeeze(),
-                              cmap=plt.cm.brg, alpha=0.3, levels=np.linspace(0, 1, 8))
+                                    fs.bent_contour_lines[epoch, :, :, 1],
+                                    fs.predictions[epoch].squeeze(),
+                                    cmap=plt.cm.brg, alpha=0.3, levels=np.linspace(0, 1, 8))
 
         return fs.lines
 
