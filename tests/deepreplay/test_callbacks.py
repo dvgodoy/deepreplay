@@ -71,7 +71,13 @@ def test_weights(replay_data, training_data):
     layers = filter(lambda key: 'layer' in key, replay_data.keys())
     for layer in layers:
         for weight in replay_data[layer].keys():
-            npt.assert_allclose(replay_data[layer][weight], training_data[layer][weight], atol=1e-5)
+            equal = np.allclose(replay_data[layer][weight], training_data[layer][weight], atol=1e-5)
+            if not equal:
+                print(layer)
+                print(weight)
+                print(replay_data[layer][weight])
+                print(training_data[layer][weight])
+            assert equal
 
 def test_metrics(replay_data, training_data, model_data):
     npt.assert_allclose(replay_data['loss'], training_data['loss'], atol=1e-5)
