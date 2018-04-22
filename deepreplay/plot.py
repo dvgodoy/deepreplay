@@ -132,7 +132,7 @@ def compose_plots(objects, epoch, title=''):
     epoch = min(epoch, epoch_end)
 
     for obj in objects:
-        getattr(obj.__class__, '_update')(epoch - 1, obj)
+        getattr(obj.__class__, '_update')(epoch, obj)
         for ax, ax_title in zip(obj.axes, obj.title):
             ax.set_title(ax_title)
 
