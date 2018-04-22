@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/dvgodoy/deepreplay.svg?branch=master)](https://travis-ci.org/dvgodoy/deepreplay)
+[![Documentation Status](http://readthedocs.org/projects/deepreplay/badge/?version=latest)](http://deepreplay.readthedocs.io/en/latest/?badge=latest)
 
 # Deep Replay
 
