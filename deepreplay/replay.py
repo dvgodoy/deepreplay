@@ -111,7 +111,8 @@ class Replay(object):
         weights = [np.array(self.group['layer{}'.format(l)]['weights{}'.format(w)])
                    for l, ws in enumerate(n_weights)
                    for w in ws]
-        return [[w[epoch] for w in weights] for epoch in range(self.n_epochs)]
+        # Since initial weights are also saved, there are n_epochs + 1 elements in total
+        return [[w[epoch] for w in weights] for epoch in range(self.n_epochs + 1)]
 
     def _make_function(self, layer):
         """Creates a Keras function to return the output of the
@@ -166,7 +167,7 @@ class Replay(object):
             metric = np.zeros(shape=(self.n_epochs,))
         return metric
 
-    def predict_proba(self, epoch_start=1, epoch_end=-1):
+    def predict_proba(self, epoch_start=0, epoch_end=-1):
         """Generates class probability predictions for the inputs
         samples by epoch.
 
@@ -183,20 +184,19 @@ class Replay(object):
             An array of shape (n_epochs, n_samples, 2) of probabi-
             lity predictions.
         """
-        epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
 
         probas = []
         # For each epoch, uses the corresponding weights
-        for epoch in range(epoch_start, epoch_end):
+        for epoch in range(epoch_start, epoch_end + 1):
             weights = self.weights[epoch]
             probas.append(self._predict_proba(self.inputs, weights)[0])
         probas = np.array(probas)
         return probas
 
-    def build_loss_histogram(self, ax, epoch_start=1, epoch_end=-1):
+    def build_loss_histogram(self, ax, epoch_start=0, epoch_end=-1):
         """Builds a LossHistogram object to be used for plotting and
         animating.
         The underlying data, that is, the binary cross-entropy loss
@@ -223,14 +223,13 @@ class Replay(object):
         if self.model.loss != 'binary_crossentropy':
             raise NotImplementedError("Only binary cross-entropy is supported!")
 
-        epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
         binary_xentropy = []
 
         # For each epoch, uses the corresponding weights
-        for epoch in range(epoch_start, epoch_end):
+        for epoch in range(epoch_start, epoch_end + 1):
             weights = self.weights[epoch]
 
             # Sample weights fixed to one!
@@ -243,7 +242,7 @@ class Replay(object):
         self._loss_hist_plot = LossHistogram(ax).load_data(self._loss_hist_data)
         return self._loss_hist_plot
 
-    def build_loss_and_metric(self, ax, metric_name, epoch_start=1, epoch_end=-1):
+    def build_loss_and_metric(self, ax, metric_name, epoch_start=0, epoch_end=-1):
         """Builds a LossAndMetric object to be used for plotting and
         animating.
         The underlying data, that is, the loss and metric per epoch,
@@ -267,14 +266,13 @@ class Replay(object):
             An instance of a LossAndMetric object to make plots and
             animations.
         """
-        epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
 
         evaluations = []
         # For each epoch, uses the corresponding weights
-        for epoch in range(epoch_start, epoch_end):
+        for epoch in range(epoch_start, epoch_end + 1):
             weights = self.weights[epoch]
 
             # Sample weights fixed to one!
@@ -286,13 +284,13 @@ class Replay(object):
         try:
             metric = evaluations[:, self.model.metrics_names.index(metric_name)]
         except ValueError:
-            metric = np.zeros(shape=(epoch_end - epoch_start,))
+            metric = np.zeros(shape=(epoch_end - epoch_start + 1,))
 
         self._loss_and_metric_data = LossAndMetricData(loss=loss, metric=metric, metric_name=metric_name)
         self._loss_and_metric_plot = LossAndMetric(ax).load_data(self._loss_and_metric_data)
         return self._loss_and_metric_plot
 
-    def build_probability_histogram(self, ax_negative, ax_positive, epoch_start=1, epoch_end=-1):
+    def build_probability_histogram(self, ax_negative, ax_positive, epoch_start=0, epoch_end=-1):
         """Builds a ProbabilityHistogram object to be used for plotting
         and animating.
         The underlying data, that is, the predicted probabilities
@@ -322,7 +320,6 @@ class Replay(object):
         if self.model.loss != 'binary_crossentropy':
             raise NotImplementedError("Only binary cross-entropy is supported!")
 
-        epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
@@ -331,8 +328,8 @@ class Replay(object):
         self._prob_hist_plot = ProbabilityHistogram(ax_negative, ax_positive).load_data(self._prob_hist_data)
         return self._prob_hist_plot
 
-    def build_feature_space(self, ax, layer_name, contour_points= 1000, xlim=(-1, 1), ylim=(-1, 1), epoch_start=1,
-                            epoch_end=-1):
+    def build_feature_space(self, ax, layer_name, contour_points=1000, xlim=(-1, 1), ylim=(-1, 1), scale_fixed=True,
+                            epoch_start=0, epoch_end=-1):
         """Builds a FeatureSpace object to be used for plotting and
         animating.
         The underlying data, that is, grid lines, inputs and contour
@@ -356,6 +353,9 @@ class Replay(object):
             Boundaries for the X axis of the grid.
         ylim: tuple of ints, optional
             Boundaries for the Y axis of the grid.
+        scaled_fixed: boolean, optional
+            If True, axis scales are fixed to the maximum from beginning.
+            Default is True.
         epoch_start: int, optional
             First epoch to consider.
         epoch_end: int, optional
@@ -371,7 +371,6 @@ class Replay(object):
         layer = self.model.get_layer(layer_name)
         assert layer.units == 2, 'Only layers with 2 hidden units are supported!'
 
-        epoch_start -= 1
         if epoch_end == -1:
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
@@ -399,7 +398,7 @@ class Replay(object):
         bent_preds = []
 
         # For each epoch, uses the corresponding weights
-        for epoch in range(epoch_start, epoch_end):
+        for epoch in range(epoch_start, epoch_end + 1):
             weights = self.weights[epoch]
 
             # Transforms the grid lines
@@ -429,5 +428,5 @@ class Replay(object):
         self._feature_space_data = FeatureSpaceData(line=line_data, bent_line=bent_line_data, prediction=bent_preds)
 
         # Creates a FeatureSpace plot object and load data into it
-        self._feature_space_plot =  FeatureSpace(ax).load_data(self._feature_space_data)
+        self._feature_space_plot =  FeatureSpace(ax, scale_fixed).load_data(self._feature_space_data)
         return self._feature_space_plot

@@ -1,4 +1,5 @@
 from __future__ import division
+import os
 import numpy as np
 import h5py
 from keras.callbacks import Callback
@@ -35,6 +36,7 @@ class ReplayData(Callback):
         self.handler = h5py.File('{}'.format(filename), 'a')
         self.inputs = inputs
         self.targets = targets
+        self.filepath = os.path.split(filename)[0]
         self.filename = filename
         self.group = None
         self.group_name = group_name
@@ -51,7 +53,7 @@ class ReplayData(Callback):
                 self.group['layer{}'.format(i)]['weights{}'.format(j)][self.current_epoch + 1] = weights
 
     def on_train_begin(self, logs={}):
-        self.model.save('{}_model.h5'.format(self.group_name))
+        self.model.save(os.path.join(self.filepath, '{}_model.h5'.format(self.group_name)))
         self.n_epochs = self.params['epochs']
 
         self.group = self.handler.create_group(self.group_name)
