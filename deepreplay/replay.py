@@ -30,7 +30,7 @@ class Replay(object):
     feature_space: (FeatureSpace, FeatureSpaceData)
         FeatureSpace object to be used for plotting and animating;
         namedtuple containing information about original grid lines,
-         data points and predictions.
+        data points and predictions.
 
     loss_histogram: (LossHistogram, LossHistogramData)
         LossHistogram object to be used for plotting and animating;
