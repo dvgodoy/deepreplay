@@ -75,8 +75,8 @@ def test_weights(replay_data, training_data):
             if not equal:
                 print(layer)
                 print(weight)
-                print(replay_data[layer][weight])
-                print(training_data[layer][weight])
+                print(replay_data[layer][weight][:])
+                print(training_data[layer][weight][:])
             assert equal
 
 def test_metrics(replay_data, training_data, model_data):
