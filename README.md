@@ -32,6 +32,10 @@ To install ***Deep Replay*** from [PyPI](https://pypi.org/project/deepreplay/), 
 pip install deepreplay
 ```
 
+### Documentation
+
+You can find the full documentations at [Read the Docs](http://deepreplay.readthedocs.io/).
+
 ### Quick Start
 
 To use ***Deep Replay***, you must first create an instance of the Keras' callback, ***ReplayData***, passing as arguments the inputs (X) and outputs (y) you're using to train the model, as well as the filename and group (for more details, see h5py) where you want the collected data to be saved:
