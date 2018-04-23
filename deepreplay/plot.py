@@ -280,8 +280,8 @@ class FeatureSpace(Basic):
 
     def _prepare_plot(self):
         if self.scale_fixed:
-            xlim = [self.bent_lines[:, :, :, 0].min(), self.bent_lines[:, :, :, 0].max()]
-            ylim = [self.bent_lines[:, :, :, 1].min(), self.bent_lines[:, :, :, 1].max()]
+            xlim = [self.bent_contour_lines[:, :, :, 0].min(), self.bent_contour_lines[:, :, :, 0].max()]
+            ylim = [self.bent_contour_lines[:, :, :, 1].min(), self.bent_contour_lines[:, :, :, 1].max()]
             self.ax.set_xlim(xlim)
             self.ax.set_ylim(ylim)
 
@@ -297,8 +297,8 @@ class FeatureSpace(Basic):
             point = self.ax.scatter([], [])
             self.points.append(point)
 
-        contour_x = self.contour_lines[:, :, 0]
-        contour_y = self.contour_lines[:, :, 1]
+        contour_x = self.bent_contour_lines[0, :, :, 0]
+        contour_y = self.bent_contour_lines[0, :, :, 1]
         self.contour = self.ax.contourf(contour_x, contour_y, np.zeros(shape=(len(contour_x), len(contour_y))),
                               cmap=plt.cm.brg, alpha=0.3, levels=np.linspace(0, 1, 8))
 
@@ -307,18 +307,19 @@ class FeatureSpace(Basic):
         epoch = i + epoch_start
         fs.ax.set_title('Epoch: {}'.format(epoch))
         if not fs.scale_fixed:
-            xlim = [fs.bent_lines[epoch, :, :, 0].min(), fs.bent_lines[epoch, :, :, 0].max()]
-            ylim = [fs.bent_lines[epoch, :, :, 1].min(), fs.bent_lines[epoch, :, :, 1].max()]
+            xlim = [fs.bent_contour_lines[epoch, :, :, 0].min(), fs.bent_contour_lines[epoch, :, :, 0].max()]
+            ylim = [fs.bent_contour_lines[epoch, :, :, 1].min(), fs.bent_contour_lines[epoch, :, :, 1].max()]
             fs.ax.set_xlim(xlim)
             fs.ax.set_ylim(ylim)
 
-        line_coords = fs.bent_lines[epoch].transpose()
-        input_coords = fs.bent_inputs[epoch].transpose()
+        if len(fs.lines):
+            line_coords = fs.bent_lines[epoch].transpose()
 
         for c, line in enumerate(fs.lines):
             line.set_data(*line_coords[:, :, c])
 
         colors = ['b', 'g']
+        input_coords = fs.bent_inputs[epoch].transpose()
         for c in range(len(fs.points)):
             fs.points[c].remove()
             fs.points[c] = fs.ax.scatter(*input_coords[:, :, c], marker='o', color=colors[c], s=10)

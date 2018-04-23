@@ -114,11 +114,11 @@ class Replay(object):
         # Since initial weights are also saved, there are n_epochs + 1 elements in total
         return [[w[epoch] for w in weights] for epoch in range(self.n_epochs + 1)]
 
-    def _make_function(self, layer):
+    def _make_function(self, inputs, layer):
         """Creates a Keras function to return the output of the
         `layer` argument, given inputs and weights
         """
-        return K.function(inputs=self.model.inputs + self._model_weights,
+        return K.function(inputs=[K.learning_phase()] + inputs + self._model_weights,
                           outputs=[layer.output])
 
     def _predict_proba(self, inputs, weights):
@@ -382,14 +382,21 @@ class Replay(object):
         y_ind = y.squeeze().argsort()
         X = X.squeeze()[y_ind].reshape(X.shape)
 
+        input_dims = self.model.input_shape[-1]
+        n_classes = len(np.unique(y))
+
         # Builds a 2D grid and the corresponding contour coordinates
-        grid_lines = build_2d_grid(xlim, ylim)
-        contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
+        grid_lines = np.array([])
+        contour_lines = np.array([])
+        if input_dims == 2:
+            grid_lines = build_2d_grid(xlim, ylim)
+            contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
 
         # Creates Keras functions to get activations for the specified layer
-        get_activations = self._make_function(layer)
+        get_activations = self._make_function(self.model.inputs, layer)
         # Creates Keras function to get outputs of the last layer
-        get_predictions = self._make_function(self.model.layers[-1])
+        get_predictions = self._make_function(self.model.inputs, self.model.layers[-1])
+        get_pred_from_act = self._make_function([layer.output], self.model.layers[-1])
 
         # Initializes "bent" variables, that is, the results of the transformations
         bent_lines = []
@@ -401,25 +408,45 @@ class Replay(object):
         for epoch in range(epoch_start, epoch_end + 1):
             weights = self.weights[epoch]
 
-            # Transforms the grid lines
-            inputs = [grid_lines.reshape(-1, 2)] + weights
-            output_shape = (grid_lines.shape[:2]) + (-1,)
-            bent_lines.append(get_activations(inputs=inputs)[0].reshape(output_shape))
-
             # Transforms the inputs
-            inputs = [X] + weights
+            inputs = [TEST_MODE, X] + weights
             bent_inputs.append(get_activations(inputs=inputs)[0])
 
-            # Transforms the contour lines
-            inputs = [contour_lines.reshape(-1, 2)] + weights
-            output_shape = (contour_lines.shape[:2]) + (-1,)
-            bent_contour_lines.append(get_activations(inputs=inputs)[0].reshape(output_shape))
-            # Makes predictions for each point in the contour surface
-            bent_preds.append((get_predictions(inputs=inputs)[0].reshape(output_shape) > .5).astype(np.int))
+            if input_dims == 2:
+                # Transforms the grid lines
+                inputs = [TEST_MODE, grid_lines.reshape(-1, 2)] + weights
+                output_shape = (grid_lines.shape[:2]) + (-1,)
+                bent_lines.append(get_activations(inputs=inputs)[0].reshape(output_shape))
 
-        # Makes lists into ndarrays and wrap them as namedtupls
-        bent_lines = np.array(bent_lines)
+                inputs = [TEST_MODE, contour_lines.reshape(-1, 2)] + weights
+                output_shape = (contour_lines.shape[:2]) + (-1,)
+                bent_contour_lines.append(get_activations(inputs=inputs)[0].reshape(output_shape))
+                # Makes predictions for each point in the contour surface
+                bent_preds.append((get_predictions(inputs=inputs)[0].reshape(output_shape) > .5).astype(np.int))
+
         bent_inputs = np.array(bent_inputs)
+
+        if input_dims > 2:
+            xlim = (bent_inputs[:, :, 0].min(), bent_inputs[:, :, 0].max())
+            ylim = (bent_inputs[:, :, 1].min(), bent_inputs[:, :, 1].max())
+            grid_contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
+            # For each epoch, uses the corresponding weights
+            for epoch in range(epoch_start, epoch_end + 1):
+                weights = self.weights[epoch]
+
+                if not scale_fixed:
+                    xlim = (bent_inputs[epoch, :, 0].min(), bent_inputs[epoch, :, 0].max())
+                    ylim = (bent_inputs[epoch, :, 1].min(), bent_inputs[epoch, :, 1].max())
+                    grid_contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
+                # Transforms the contour lines
+                bent_contour_lines.append(grid_contour_lines)
+
+                inputs = [TEST_MODE, bent_contour_lines[-1].reshape(-1, 2)] + weights
+                output_shape = (bent_contour_lines[-1].shape[:2]) + (-1,)
+                bent_preds.append((get_pred_from_act(inputs=inputs)[0].reshape(output_shape) > .5).astype(np.int))
+
+        # Makes lists into ndarrays and wrap them as namedtuples
+        bent_lines = np.array(bent_lines)
         bent_contour_lines = np.array(bent_contour_lines)
         bent_preds = np.array(bent_preds)
 
