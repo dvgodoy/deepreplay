@@ -41,17 +41,26 @@ def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
         (n_points, n_points, 2), containing all evenly spaced
         points inside the grid boundaries.
     """
-    x0s = np.linspace(*xlim, num=n_lines)
-    x1s = np.linspace(*ylim, num=n_points)
-    x0, x1 = np.meshgrid(x0s, x1s)
-
+    xs = np.linspace(*xlim, num=n_lines)
+    ys = np.linspace(*ylim, num=n_points)
+    x0, y0 = np.meshgrid(xs, ys)
     lines_x0 = np.atleast_3d(x0.transpose())
-    lines_x1 = np.atleast_3d(x1.transpose())
+    lines_y0 = np.atleast_3d(y0.transpose())
+
+    xs = np.linspace(*xlim, num=n_points)
+    ys = np.linspace(*ylim, num=n_lines)
+    x1, y1 = np.meshgrid(xs, ys)
+    lines_x1 = np.atleast_3d(x1)
+    lines_y1 = np.atleast_3d(y1)
+
+    vertical_lines = np.concatenate([lines_x0, lines_y0], axis=2)
+    horizontal_lines = np.concatenate([lines_x1, lines_y1], axis=2)
 
     if n_lines != n_points:
-        lines_x0, lines_x1 = np.concatenate([lines_x0, lines_x1]), np.concatenate([lines_x1, lines_x0])
+        lines = np.concatenate([vertical_lines, horizontal_lines], axis=0)
+    else:
+        lines = vertical_lines
 
-    lines = np.concatenate([lines_x0, lines_x1], axis=2)
     return lines
 
 def compose_animations(objects, epoch_start=0, epoch_end=-1, title=''):
@@ -447,6 +456,8 @@ class LossAndMetric(Basic):
         self.ax.set_xlim([0, self.n_epochs])
         self.ax.set_xlabel('Epoch')
         self.ax.set_ylim([0, 1.01 * self.metric.max()])
+        if self.metric_name == 'acc':
+            self.ax.set_ylim([0, 1.01])
         self.ax.set_ylabel(self.metric_name)
 
         self.ax2.set_xlim([0, self.n_epochs])
@@ -499,7 +510,7 @@ class LossHistogram(Basic):
         intervals = (np.diff(loss_limits)[0] / magnitude + 1).astype(np.int)
         while 10 > intervals > 1:
             intervals = (intervals - 1) * 2 + 1
-        loss_scale = np.linspace(loss_limits[0], loss_limits[1], intervals)
+        loss_scale = np.linspace(max(0.0, loss_limits[0]), loss_limits[1], intervals)
         return loss_scale
 
     def load_data(self, loss_hist_data):
