@@ -160,6 +160,7 @@ class Basic(object):
         self.n_epochs = 0
 
         self.ax = ax
+        self.ax.clear()
         self.fig = ax.get_figure()
 
     @property
@@ -348,6 +349,8 @@ class ProbabilityHistogram(Basic):
         self._title = ('Negative Cases', 'Positive Cases')
         self.ax1 = ax1
         self.ax2 = ax2
+        self.ax1.clear()
+        self.ax2.clear()
         self.fig = ax1.get_figure()
         self.line = ax1.plot([], [])
 
