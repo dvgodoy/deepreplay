@@ -160,7 +160,7 @@ fs = replay.build_feature_space(ax_fs, layer_name='hidden')
 
 By doing so, you will be including a transformation from a highly dimensional space to a 2-dimensional space, which is also going to be learned by the network.
 
-For examples, check either the [Circles Dataset]() or [UCI Spambase Dataset]() examples.
+For examples, check either the [Circles Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/circles_dataset.ipynb) or [UCI Spambase Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/UCI_spambase_dataset.ipynb) notebooks.
 
 ## Comments, questions, suggestions, bugs
 

@@ -89,7 +89,7 @@ def test_build_feature_space(replay, epoch_models):
     _, ax = plt.subplots(1, 1)
     replay.build_feature_space(ax, 'hidden', contour_points=contour_points, epoch_start=2, epoch_end=19)
     _, data = replay.feature_space
-    _, bent_line, actual_prediction = data
+    _, bent_line, actual_prediction, _ = data
     _, _, actual_bent_contour = bent_line
 
     contour_lines = build_2d_grid((-1, 1), (-1, 1), contour_points, contour_points).reshape(-1, 2)
