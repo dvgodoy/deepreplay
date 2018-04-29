@@ -329,7 +329,7 @@ class Replay(object):
         return self._prob_hist_plot
 
     def build_feature_space(self, ax, layer_name, contour_points=1000, xlim=(-1, 1), ylim=(-1, 1), scale_fixed=True,
-                            epoch_start=0, epoch_end=-1):
+                            display_grid=True, epoch_start=0, epoch_end=-1):
         """Builds a FeatureSpace object to be used for plotting and
         animating.
         The underlying data, that is, grid lines, inputs and contour
@@ -355,6 +355,9 @@ class Replay(object):
             Boundaries for the Y axis of the grid.
         scaled_fixed: boolean, optional
             If True, axis scales are fixed to the maximum from beginning.
+            Default is True.
+        display_grid: boolean, optional
+            If True, display grid lines (for 2-dimensional inputs).
             Default is True.
         epoch_start: int, optional
             First epoch to consider.
@@ -388,7 +391,7 @@ class Replay(object):
         # Builds a 2D grid and the corresponding contour coordinates
         grid_lines = np.array([])
         contour_lines = np.array([])
-        if input_dims == 2:
+        if input_dims == 2 and display_grid:
             grid_lines = build_2d_grid(xlim, ylim)
             contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
 
@@ -412,7 +415,7 @@ class Replay(object):
             inputs = [TEST_MODE, X] + weights
             bent_inputs.append(get_activations(inputs=inputs)[0])
 
-            if input_dims == 2:
+            if input_dims == 2 and display_grid:
                 # Transforms the grid lines
                 inputs = [TEST_MODE, grid_lines.reshape(-1, 2)] + weights
                 output_shape = (grid_lines.shape[:2]) + (-1,)

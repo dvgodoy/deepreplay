@@ -5,14 +5,14 @@ def readme():
         return f.read()
 
 setup(name='deepreplay',
-      version='0.1.0a3',
+      version='0.1.0a4',
       install_requires=['matplotlib', 'numpy', 'h5py', 'seaborn', 'keras'],
       description='"Hyper-parameters in Action!" visualizing tool for Keras models.',
       long_description=readme(),
       long_description_content_type='text/markdown',
       url='https://github.com/dvgodoy/deepreplay',
       author='Daniel Voigt Godoy',
-      author_email='dvgodoy@gmail.com',
+      author_email='datagnosis@gmail.com',
       keywords=['keras', 'hyper-parameters', 'animation', 'plot', 'chart'],
       license='MIT',
       classifiers=[
