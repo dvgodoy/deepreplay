@@ -372,7 +372,7 @@ class Replay(object):
         """
         # Finds the layer by name,
         layer = self.model.get_layer(layer_name)
-        assert layer.units == 2, 'Only layers with 2 hidden units are supported!'
+        assert layer.output_shape == (None, 2), 'Only layers with 2-dimensional outputs are supported!'
 
         if epoch_end == -1:
             epoch_end = self.n_epochs
@@ -384,6 +384,7 @@ class Replay(object):
         # It is not quite 'unshuffling', as it does not care about the order of the examples inside each class
         y_ind = y.squeeze().argsort()
         X = X.squeeze()[y_ind].reshape(X.shape)
+        y = y.squeeze()[y_ind]
 
         input_dims = self.model.input_shape[-1]
         n_classes = len(np.unique(y))
@@ -429,7 +430,7 @@ class Replay(object):
 
         bent_inputs = np.array(bent_inputs)
 
-        if input_dims > 2:
+        if (input_dims > 2) or (not display_grid):
             xlim = (bent_inputs[:, :, 0].min(), bent_inputs[:, :, 0].max())
             ylim = (bent_inputs[:, :, 1].min(), bent_inputs[:, :, 1].max())
             grid_contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
@@ -455,7 +456,8 @@ class Replay(object):
 
         line_data = FeatureSpaceLines(grid=grid_lines, input=X, contour=contour_lines)
         bent_line_data = FeatureSpaceLines(grid=bent_lines, input=bent_inputs, contour=bent_contour_lines)
-        self._feature_space_data = FeatureSpaceData(line=line_data, bent_line=bent_line_data, prediction=bent_preds)
+        self._feature_space_data = FeatureSpaceData(line=line_data, bent_line=bent_line_data,
+                                                    prediction=bent_preds, target=y)
 
         # Creates a FeatureSpace plot object and load data into it
         self._feature_space_plot =  FeatureSpace(ax, scale_fixed).load_data(self._feature_space_data)

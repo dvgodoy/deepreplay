@@ -25,13 +25,16 @@ Feature Space | Class Probability | Loss/Metric | Losses
 :-:|:-:|:-:|:-:
 ![Feature Space](/images/feature_space.png) | ![Probability Histogram](/images/prob_histogram.png) | ![Loss and Metric](/images/loss_and_metric.png) | ![Loss Histogram](/images/loss_histogram.png)
 
-## Google Colab
+### Google Colab
 
 Eager to try it out right away? Don't wait any longer!
 
 Open the notebooks directly on Google Colab and try it yourself:
 
 - [Part 1 - Activation Functions](https://colab.research.google.com/github/dvgodoy/deepreplay/blob/master/notebooks/part1_activation_functions.ipynb)
+- [Moons Dataset](https://colab.research.google.com/github/dvgodoy/deepreplay/blob/master/notebooks/moons_dataset.ipynb)
+- [Circles Dataset](https://colab.research.google.com/github/dvgodoy/deepreplay/blob/master/notebooks/circles_dataset.ipynb)
+- [UCI Spambase Dataset](https://colab.research.google.com/github/dvgodoy/deepreplay/blob/master/notebooks/UCI_spambase_dataset.ipynb)
 
 ### Installation
 
@@ -124,7 +127,42 @@ writer = Writer(fps=5, metadata=metadata)
 fs.animate().save('feature_space_animation.mp4', dpi=120, writer=writer)
 ```
 
-### Comments, questions, suggestions, bugs
+## FAQ
+
+### Grid lines are missing!
+
+Does your input have more than 2 dimensions? If so, this is expected, as grid lines are only plot for 2-dimensional inputs.
+
+If your input is 2-dimensional and grid lines are missing nonetheless, please open an [issue](https://github.com/dvgodoy/deepreplay/issues).
+
+### My hidden layer has more than 2 units! How can I plot it anyway?
+
+Apart from toy datasets, it is likely the (last) hidden layer has more than 2 units. But ***DeepReplay*** only supports ***FeatureSpace*** plots based on 2-unit hidden layers. So, what can you do?
+
+Well, you can add an extra hidden layer with ***2 units*** and a ***LINEAR*** activation function and tell ****DeepReplay*** to use this layer for plotting the ***FeatureSpace***!
+
+```python
+## Input layer has 57 units
+## Hidden layer has 10 units
+model = Sequential()
+model.add(Dense(input_dim=57, units=10, kernel_initializer='he', activation='tanh'))
+
+## Added layer with 2 units and LINEAR activation - the layer to plot using FeatureSpace!
+model.add(Dense(units=2, kernel_initializer='normal', activation='linear', name='hidden'))
+
+## Typical output layer for binary classification
+model.add(Dense(units=1, kernel_initializer='normal', activation='sigmoid', name='output'))
+
+...
+
+fs = replay.build_feature_space(ax_fs, layer_name='hidden')
+```
+
+By doing so, you will be including a transformation from a highly dimensional space to a 2-dimensional space, which is also going to be learned by the network.
+
+For examples, check either the [Circles Dataset]() or [UCI Spambase Dataset]() examples.
+
+## Comments, questions, suggestions, bugs
 
 ***DISCLAIMER***: this is a project ***under development***, so it is likely you'll run into bugs/problems.
 

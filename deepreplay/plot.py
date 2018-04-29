@@ -2,13 +2,14 @@ from __future__ import division
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import seaborn as sns
 from collections import namedtuple
 from matplotlib import animation
 matplotlib.rcParams['animation.writer'] = 'ffmpeg'
 sns.set_style('white')
 
-FeatureSpaceData = namedtuple('FeatureSpaceData', ['line', 'bent_line', 'prediction'])
+FeatureSpaceData = namedtuple('FeatureSpaceData', ['line', 'bent_line', 'prediction', 'target'])
 FeatureSpaceLines = namedtuple('FeatureSpaceLines', ['grid', 'input', 'contour'])
 LossAndMetricData = namedtuple('LossAndMetricData', ['loss', 'metric', 'metric_name'])
 ProbHistogramData = namedtuple('ProbHistogramData', ['prob', 'target'])
@@ -242,10 +243,10 @@ class FeatureSpace(Basic):
         self.bent_inputs = None
         self.bent_lines = None
         self.bent_contour_lines = None
-        self.inputs = None
         self.grid_lines = None
         self.contour_lines = None
         self.predictions = None
+        self.targets = None
 
         self.n_inputs = 0
 
@@ -267,13 +268,14 @@ class FeatureSpace(Basic):
             Returns the FeatureSpace instance itself.
         """
         self.predictions = feature_space_data.prediction
+        self.targets = feature_space_data.target
         self.grid_lines, self.inputs, self.contour_lines = feature_space_data.line
         self.bent_lines, self.bent_inputs, self.bent_contour_lines = feature_space_data.bent_line
 
         self.n_epochs, _, self.n_inputs = self.bent_inputs.shape
 
-        self.inputs = self.inputs.reshape(2, -1, self.n_inputs)
-        self.bent_inputs = self.bent_inputs.reshape(self.n_epochs, 2, -1, self.n_inputs)
+        self.classes = np.unique(self.targets)
+        self.bent_inputs = [self.bent_inputs[:, self.targets == target, :] for target in self.classes]
 
         self._prepare_plot()
         return self
@@ -293,7 +295,7 @@ class FeatureSpace(Basic):
         for c in range(self.grid_lines.shape[0]):
             line, = self.ax.plot([], [], linewidth=0.5, color='k')
             self.lines.append(line)
-        for c in range(self.inputs.shape[0]):
+        for c in range(len(self.classes)):
             point = self.ax.scatter([], [])
             self.points.append(point)
 
@@ -319,10 +321,10 @@ class FeatureSpace(Basic):
             line.set_data(*line_coords[:, :, c])
 
         colors = ['b', 'g']
-        input_coords = fs.bent_inputs[epoch].transpose()
+        input_coords = [coord[epoch].transpose() for coord in fs.bent_inputs]
         for c in range(len(fs.points)):
             fs.points[c].remove()
-            fs.points[c] = fs.ax.scatter(*input_coords[:, :, c], marker='o', color=colors[c], s=10)
+            fs.points[c] = fs.ax.scatter(*input_coords[c], marker='o', color=colors[c], s=10)
 
         for c in fs.contour.collections:
             c.remove()  # removes only the contours, leaves the rest intact
@@ -332,6 +334,9 @@ class FeatureSpace(Basic):
                                     fs.predictions[epoch].squeeze(),
                                     cmap=plt.cm.brg, alpha=0.3, levels=np.linspace(0, 1, 8))
 
+        fs.ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
+        fs.ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
+        fs.ax.locator_params(tight=True, nbins=7)
         return fs.lines
 
 
@@ -414,6 +419,11 @@ class ProbabilityHistogram(Basic):
         ph.ax2.hist(tp, bins=ph.bins, color='k', alpha=.4)
         ph.ax2.hist(fp, bins=ph.bins, color='r', alpha=.5)
 
+        ph.ax1.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
+        ph.ax2.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
+        ph.ax1.locator_params(tight=True, nbins=3)
+        ph.ax2.locator_params(tight=True, nbins=3)
+
         return ph.line
 
 class LossAndMetric(Basic):
@@ -487,6 +497,9 @@ class LossAndMetric(Basic):
         lm.point2.remove()
         lm.point2 = lm.ax2.scatter(epoch, lm.loss[epoch], marker='o', color='r')
 
+        lm.ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.0f'))
+        lm.ax.locator_params(tight=True, nbins=3)
+
         return lm.line1, lm.line2
 
 class LossHistogram(Basic):
@@ -551,5 +564,8 @@ class LossHistogram(Basic):
         lh.ax.set_xlabel('Loss')
         lh.ax.set_ylabel('# of Cases')
         lh.ax.hist(lh.losses.squeeze()[i], bins=lh.bins, color='k', alpha=.4)
+
+        lh.ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
+        lh.ax.locator_params(tight=True, nbins=4)
 
         return lh.line

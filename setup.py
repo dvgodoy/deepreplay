@@ -5,8 +5,8 @@ def readme():
         return f.read()
 
 setup(name='deepreplay',
-      version='0.1.0a4',
-      install_requires=['matplotlib', 'numpy', 'h5py', 'seaborn', 'keras'],
+      version='0.1.0a5',
+      install_requires=['matplotlib', 'numpy', 'h5py', 'seaborn', 'keras', 'sklearn'],
       description='"Hyper-parameters in Action!" visualizing tool for Keras models.',
       long_description=readme(),
       long_description_content_type='text/markdown',
