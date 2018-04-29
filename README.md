@@ -25,6 +25,14 @@ Feature Space | Class Probability | Loss/Metric | Losses
 :-:|:-:|:-:|:-:
 ![Feature Space](/images/feature_space.png) | ![Probability Histogram](/images/prob_histogram.png) | ![Loss and Metric](/images/loss_and_metric.png) | ![Loss Histogram](/images/loss_histogram.png)
 
+## Google Colab
+
+Eager to try it out right away? Don't wait any longer!
+
+Open the notebooks directly on Google Colab and try it yourself:
+
+- [Part 1 - Activation Functions](https://colab.research.google.com/github/dvgodoy/deepreplay/blob/master/notebooks/part1_activation_functions.ipynb)
+
 ### Installation
 
 To install ***Deep Replay*** from [PyPI](https://pypi.org/project/deepreplay/), just type:
