@@ -97,11 +97,13 @@ class Replay(object):
         self._loss_hist_data = None
         self._loss_and_metric_data = None
         self._prob_hist_data = None
+        self._decision_boundary_data = None
         # Attributes for the visualizations - Plot objects
         self._feature_space_plot = None
         self._loss_hist_plot = None
         self._loss_and_metric_plot = None
         self._prob_hist_plot = None
+        self._decision_boundary_plot = None
 
     def _retrieve_weights(self):
         # Generates ranges for the number of different weight arrays in each layer
@@ -123,6 +125,10 @@ class Replay(object):
 
     def _predict_proba(self, inputs, weights):
         return self._get_output([self.learning_phase, inputs] + weights)
+
+    @property
+    def decision_boundary(self):
+        return self._decision_boundary_plot, self._decision_boundary_data
 
     @property
     def feature_space(self):
@@ -327,6 +333,98 @@ class Replay(object):
         self._prob_hist_data = ProbHistogramData(prob=self.predict_proba(epoch_start, epoch_end), target=self.targets)
         self._prob_hist_plot = ProbabilityHistogram(ax_negative, ax_positive).load_data(self._prob_hist_data)
         return self._prob_hist_plot
+
+    def build_decision_boundary(self, ax, contour_points=1000, xlim=(-1, 1), ylim=(-1, 1), display_grid=True,
+                                epoch_start=0, epoch_end=-1):
+        """Builds a FeatureSpace object to be used for plotting and
+        animating the raw inputs and the decision boundary.
+        The underlying data, that is, grid lines, inputs and contour
+        lines, as well as the corresponding predictions for the
+        contour lines, can be later accessed as the second element of
+        the  `decision_boundary` property.
+
+        Only inputs with 2 dimensions are supported!
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        contour_points: int, optional
+            Number of points in each axis of the contour.
+            Default is 1,000.
+        xlim: tuple of ints, optional
+            Boundaries for the X axis of the grid.
+        ylim: tuple of ints, optional
+            Boundaries for the Y axis of the grid.
+        display_grid: boolean, optional
+            If True, display grid lines (for 2-dimensional inputs).
+            Default is True.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        decision_boundary_plot: FeatureSpace
+            An instance of a FeatureSpace object to make plots and
+            animations.
+        """
+        input_dims = self.model.input_shape[-1]
+        assert input_dims == 2, 'Only layers with 2-dimensional inputs are supported!'
+
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        X = self.inputs
+        y = self.targets
+
+        y_ind = y.squeeze().argsort()
+        X = X.squeeze()[y_ind].reshape(X.shape)
+        y = y.squeeze()[y_ind]
+
+        n_classes = len(np.unique(y))
+
+        # Builds a 2D grid and the corresponding contour coordinates
+        grid_lines = np.array([])
+        if display_grid:
+            grid_lines = build_2d_grid(xlim, ylim)
+
+        contour_lines = build_2d_grid(xlim, ylim, contour_points, contour_points)
+        get_predictions = self._make_function(self.model.inputs, self.model.layers[-1])
+
+        bent_lines = []
+        bent_inputs = []
+        bent_contour_lines = []
+        bent_preds = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            weights = self.weights[epoch]
+
+            bent_lines.append(grid_lines)
+            bent_inputs.append(X)
+            bent_contour_lines.append(contour_lines)
+
+            inputs = [TEST_MODE, contour_lines.reshape(-1, 2)] + weights
+            output_shape = (contour_lines.shape[:2]) + (-1,)
+            # Makes predictions for each point in the contour surface
+            bent_preds.append((get_predictions(inputs=inputs)[0].reshape(output_shape) > .5).astype(np.int))
+
+        # Makes lists into ndarrays and wrap them as namedtuples
+        bent_inputs = np.array(bent_inputs)
+        bent_lines = np.array(bent_lines)
+        bent_contour_lines = np.array(bent_contour_lines)
+        bent_preds = np.array(bent_preds)
+
+        line_data = FeatureSpaceLines(grid=grid_lines, input=X, contour=contour_lines)
+        bent_line_data = FeatureSpaceLines(grid=bent_lines, input=bent_inputs, contour=bent_contour_lines)
+        self._decision_boundary_data = FeatureSpaceData(line=line_data, bent_line=bent_line_data,
+                                                        prediction=bent_preds, target=y)
+
+        # Creates a FeatureSpace plot object and load data into it
+        self._decision_boundary_plot =  FeatureSpace(ax, True).load_data(self._decision_boundary_data)
+        return self._decision_boundary_plot
 
     def build_feature_space(self, ax, layer_name, contour_points=1000, xlim=(-1, 1), ylim=(-1, 1), scale_fixed=True,
                             display_grid=True, epoch_start=0, epoch_end=-1):
