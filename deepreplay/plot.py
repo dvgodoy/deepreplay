@@ -150,7 +150,7 @@ def compose_plots(objects, epoch, title=''):
         title += ' - '
     fig.suptitle('{}Epoch {}'.format(title, epoch), fontsize=14)
     fig.tight_layout()
-    fig.subplots_adjust(top=0.9)
+    fig.subplots_adjust(top=0.85)
     return fig
 
 class Basic(object):
@@ -158,6 +158,7 @@ class Basic(object):
     """
     def __init__(self, ax):
         self._title = ''
+        self._custom_title = ''
         self.n_epochs = 0
 
         self.ax = ax
@@ -166,7 +167,11 @@ class Basic(object):
 
     @property
     def title(self):
-        return self._title if isinstance(self._title, tuple) else (self._title,)
+        title = self._title
+        if not isinstance(title, tuple):
+            title = (self._title,)
+        title = tuple([' '.join([self._custom_title, t]) for t in title])
+        return title
 
     @property
     def axes(self):
@@ -182,6 +187,20 @@ class Basic(object):
     @staticmethod
     def _update(i, object, epoch_start=0):
         pass
+
+    def set_title(self, title):
+        """Prepends a custom title to the plot.
+
+        Parameters
+        ----------
+        title: String
+            Custom title to prepend.
+
+        Returns
+        -------
+        None
+        """
+        self._custom_title = title
 
     def plot(self, epoch):
         """Plots data at a given epoch.
@@ -353,6 +372,7 @@ class ProbabilityHistogram(Basic):
     """
     def __init__(self, ax1, ax2):
         self._title = ('Negative Cases', 'Positive Cases')
+        self._custom_title = ''
         self.ax1 = ax1
         self.ax2 = ax2
         self.ax1.clear()

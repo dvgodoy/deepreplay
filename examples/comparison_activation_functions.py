@@ -45,12 +45,14 @@ for activation in ['sigmoid', 'tanh', 'relu']:
     replays.append(Replay(replay_filename='comparison_activation_functions.h5', group_name=activation))
 
 spaces = []
-for ax, replay in zip(axs, replays):
-    spaces.append(replay.build_feature_space(ax, layer_name='hidden'))
+for ax, replay, activation in zip(axs, replays, ['sigmoid', 'tanh', 'relu']):
+    space = replay.build_feature_space(ax, layer_name='hidden')
+    space.set_title(activation)
+    spaces.append(space)
 
 sample_figure = compose_plots(spaces, 80)
 sample_figure.savefig('comparison.png', dpi=120, format='png')
 
-sample_anim = compose_animations(spaces)
-sample_anim.save(filename='comparison.mp4', dpi=120, fps=5)
+#sample_anim = compose_animations(spaces)
+#sample_anim.save(filename='comparison.mp4', dpi=120, fps=5)
 

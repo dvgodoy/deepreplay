@@ -16,9 +16,9 @@ It contains:
  - a class ***Replay***, which leverages the collected data to build several kinds of visualizations.
 
 The available visualizations are:
- - ***Feature Space***: plot of a 2-D grid representing the twisted and turned feature space,  corresponding to the output of a hidden layer (only 2-unit hidden layers supported for now);
+ - ***Feature Space***: plot representing the twisted and turned feature space,  corresponding to the output of a hidden layer (only 2-unit hidden layers supported for now), including grid lines if the input is 2-dimensional;
  - ***Decision Boundary***: plot of a 2-D grid representing the original feature space, together with the decision boundary (only 2-dimensional inputs supported for now);
- - ***Probabilities***: histograms of the resulting class probabilities for the inputs, corresponding to the output of the final layer (only binary classification supported for now);
+ - ***Probabilities***: two histograms of the resulting classification probabilities for the inputs, corresponding to the output of the final layer (only binary classification supported for now);
  - ***Loss and Metric***: line plot for the loss and a chosen metric, computed over all the inputs;
  - ***Losses***: histogram of the losses computed over all the inputs (only binary cross-entropy loss suported for now).
 
@@ -164,7 +164,7 @@ fs = replay.build_decision_boundary(ax_fs)
 
 For an example, check the [Circles Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/circles_dataset.ipynb).
 
-#### 2.2 Using Embeddings
+#### 2.2 Using a Latent Space
 
 You can add an extra hidden layer with ***2 units*** and a ***LINEAR*** activation function and tell ***DeepReplay*** to use this layer for plotting the ***FeatureSpace***!
 
@@ -187,7 +187,7 @@ fs = replay.build_feature_space(ax_fs, layer_name='hidden')
 
 By doing so, you will be including a transformation from a highly dimensional space to a 2-dimensional space, which is also going to be learned by the network.
 
-In fact, you will be also training 2-dimensional embeddings, which will then feed the last layer. You can think of this as a logistic regression with 2 inputs, in this case, the embeddings.
+In fact, you will be learning 2-dimensional latent space, which will then feed the last layer. You can think of this as a logistic regression with 2 inputs, in this case, the latent factors.
 
 For examples, check either the [Moons Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/moons_dataset.ipynb) or [UCI Spambase Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/UCI_spambase_dataset.ipynb) notebooks.
 
