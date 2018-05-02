@@ -140,7 +140,7 @@ If your input is 2-dimensional and grid lines are missing nonetheless, please op
 
 Apart from toy datasets, it is likely the (last) hidden layer has more than 2 units. But ***DeepReplay*** only supports ***FeatureSpace*** plots based on 2-unit hidden layers. So, what can you do?
 
-There are two different ways of handling this: if your inputs are 2-dimensional, you can plot them directly, together with the decision boundary. Otherwise, you can (train and) plot 2-dimensional embeddings.
+There are two different ways of handling this: if your inputs are 2-dimensional, you can plot them directly, together with the decision boundary. Otherwise, you can (train and) plot 2-dimensional latent space.
 
 #### 2.1 Using Raw Inputs
 
@@ -187,7 +187,7 @@ fs = replay.build_feature_space(ax_fs, layer_name='hidden')
 
 By doing so, you will be including a transformation from a highly dimensional space to a 2-dimensional space, which is also going to be learned by the network.
 
-In fact, you will be learning 2-dimensional latent space, which will then feed the last layer. You can think of this as a logistic regression with 2 inputs, in this case, the latent factors.
+In fact, the model will be learning a 2-dimensional latent space, which will then feed the last layer. You can think of this as a logistic regression with 2 inputs, in this case, the latent factors.
 
 For examples, check either the [Moons Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/moons_dataset.ipynb) or [UCI Spambase Dataset](https://github.com/dvgodoy/deepreplay/blob/master/notebooks/UCI_spambase_dataset.ipynb) notebooks.
 
