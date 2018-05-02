@@ -56,7 +56,7 @@ lh = replay.build_loss_histogram(ax_lh)
 lm = replay.build_loss_and_metric(ax_lm, 'acc')
 
 sample_figure = compose_plots([fs, ph, lm, lh], 150)
-sample_figure.savefig('circles_db.png', dpi=120, format='png')
+sample_figure.savefig('circles.png', dpi=120, format='png')
 
 sample_anim = compose_animations([fs, ph, lm, lh])
-sample_anim.save(filename='circles_db.mp4', dpi=120, fps=5)
+sample_anim.save(filename='circles.mp4', dpi=120, fps=5)
