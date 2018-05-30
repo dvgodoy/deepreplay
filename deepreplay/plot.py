@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import pandas as pd
 import seaborn as sns
 from collections import namedtuple
 from matplotlib import animation
@@ -14,6 +15,7 @@ FeatureSpaceLines = namedtuple('FeatureSpaceLines', ['grid', 'input', 'contour']
 LossAndMetricData = namedtuple('LossAndMetricData', ['loss', 'metric', 'metric_name'])
 ProbHistogramData = namedtuple('ProbHistogramData', ['prob', 'target'])
 LossHistogramData = namedtuple('LossHistogramData', ['loss'])
+WeightsViolinsData = namedtuple('WeightsViolinsData', ['names', 'weights'])
 
 def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
     """Returns a 2D grid of boundaries given by `xlim` and `ylim`,
@@ -589,3 +591,37 @@ class LossHistogram(Basic):
         lh.ax.locator_params(tight=True, nbins=4)
 
         return lh.line
+
+class WeightsViolins(Basic):
+    def __init__(self, ax):
+        super(WeightsViolins, self).__init__(ax)
+        self.weights = None
+        self.names = None
+        self._title = 'Weights'
+
+    def load_data(self, weights_violins_data):
+        self.weights = weights_violins_data.weights
+        self.names = weights_violins_data.names
+        self.n_epochs = len(self.weights)
+        self._prepare_plot()
+        return self
+
+    def _prepare_plot(self):
+        self.line = self.ax.plot([], [])
+
+    @staticmethod
+    def _update(i, wv, epoch_start=0):
+        epoch = i + epoch_start
+
+        df = pd.concat([pd.DataFrame(layer_weights[0].ravel(),
+                                     columns=[layer_name]).melt(var_name='layers', value_name='weights')
+                        for layer_name, layer_weights in zip(wv.names, wv.weights[i])])
+
+        sns.violinplot(data=df, x='layers', y='weights', ax=wv.ax)
+        wv.ax.set_xticklabels(wv.names)
+        wv.ax.set_xlabel('Layers')
+        wv.ax.set_ylabel('Weights')
+        wv.ax.set_title('{} - Epoch: {}'.format(wv.title[0], epoch))
+
+        return wv.line
+

@@ -3,11 +3,17 @@ import numpy as np
 import h5py
 import keras.backend as K
 from keras.models import load_model
-from .plot import build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric
-from .plot import FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData
+from .plot import (
+    build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric, WeightsViolins
+)
+from .plot import (
+    FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData, WeightsViolinsData
+)
 
 TRAINING_MODE = 1
 TEST_MODE = 0
+ACTIVATIONS = ['softmax', 'relu', 'elu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear', 'softplus', 'softsign', 'selu']
+
 
 class Replay(object):
     """Creates an instance of Replay, to process information collected
@@ -70,6 +76,10 @@ class Replay(object):
         self.targets = self.group['targets'][:]
         self.n_epochs = self.group.attrs['n_epochs']
         self.n_layers = self.group.attrs['n_layers']
+
+        # Generates ranges for the number of different weight arrays in each layer
+        self.n_weights = [range(len(self.group['layer{}'.format(l)])) for l in range(self.n_layers)]
+
         # Retrieves weights as a list, each element being one epoch
         self.weights = self._retrieve_weights()
 
@@ -92,26 +102,44 @@ class Replay(object):
                                                    outputs=[K.binary_crossentropy(self.model.targets[0],
                                                                                   self.model.outputs[0])])
 
+        __activation_tensors = list(filter(lambda t: t[1].op.type.lower() in ACTIVATIONS,
+                                           [(self.model.layers[i].name, self.model.layers[i].output)
+                                            for i in range(self.n_layers)]))
+
+        __z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
+                                  [(self.model.layers[i - (self.model.layers[i].input.op.type in
+                                                           ['BiasAdd', 'MatMul'])].name,
+                                    self.model.layers[i].output.op.inputs[0]) for i in range(self.n_layers)]))
+
+        self._activation_layers = ['inputs'] + list(map(lambda t: t[0], __activation_tensors))
+        self._activation_tensors = self.model.inputs + list(map(lambda t: t[1], __activation_tensors))
+        self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
+                                           outputs=self._activation_tensors)
+
+        self._z_layers = list(map(lambda t: t[0], __z_tensors))
+        self._z_tensors = list(map(lambda t: t[1], __z_tensors))
+        self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
+                                       outputs=self._z_tensors)
+
         # Attributes for the visualizations - Data
         self._feature_space_data = None
         self._loss_hist_data = None
         self._loss_and_metric_data = None
         self._prob_hist_data = None
         self._decision_boundary_data = None
+        self._weights_violins_data = None
         # Attributes for the visualizations - Plot objects
         self._feature_space_plot = None
         self._loss_hist_plot = None
         self._loss_and_metric_plot = None
         self._prob_hist_plot = None
         self._decision_boundary_plot = None
+        self._weights_violins_plot = None
 
     def _retrieve_weights(self):
-        # Generates ranges for the number of different weight arrays in each layer
-        n_weights = [range(len(self.group['layer{}'.format(l)]))
-                     for l in range(self.n_layers)]
         # Retrieves weights for each layer and sequence of weights
         weights = [np.array(self.group['layer{}'.format(l)]['weights{}'.format(w)])
-                   for l, ws in enumerate(n_weights)
+                   for l, ws in enumerate(self.n_weights)
                    for w in ws]
         # Since initial weights are also saved, there are n_epochs + 1 elements in total
         return [[w[epoch] for w in weights] for epoch in range(self.n_epochs + 1)]
@@ -201,6 +229,39 @@ class Replay(object):
             probas.append(self._predict_proba(self.inputs, weights)[0])
         probas = np.array(probas)
         return probas
+
+    def build_weights_violins(self, ax, epoch_start=0, epoch_end=-1):
+        """Builds a WeightsViolins object to be used for plotting and
+        animating.
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        weights_violins_plot: WeightsViolins
+            An instance of a WeightsViolins object to make plots and
+            animations.
+        """
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        names = [layer.name for layer, weights in zip(self.model.layers, self.weights[0]) if len(weights) in (1, 2)]
+        weights = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            weights.append(list(filter(lambda weights: len(weights) in (1, 2), self.weights[epoch])))
+
+        self._weights_violins_data = WeightsViolinsData(names=names, weights=weights)
+        self._weights_violins_plot = WeightsViolins(ax).load_data(self._weights_violins_data)
+        return self._weights_violins_plot
 
     def build_loss_histogram(self, ax, epoch_start=0, epoch_end=-1):
         """Builds a LossHistogram object to be used for plotting and
