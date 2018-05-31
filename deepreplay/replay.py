@@ -4,10 +4,10 @@ import h5py
 import keras.backend as K
 from keras.models import load_model
 from .plot import (
-    build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric, WeightsViolins
+    build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric, LayerViolins
 )
 from .plot import (
-    FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData, WeightsViolinsData
+    FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData, LayerViolinsData
 )
 
 TRAINING_MODE = 1
@@ -116,8 +116,8 @@ class Replay(object):
         self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                            outputs=self._activation_tensors)
 
-        self._z_layers = list(map(lambda t: t[0], __z_tensors))
-        self._z_tensors = list(map(lambda t: t[1], __z_tensors))
+        self._z_layers = ['inputs'] + list(map(lambda t: t[0], __z_tensors))
+        self._z_tensors = self.model.inputs + list(map(lambda t: t[1], __z_tensors))
         self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                        outputs=self._z_tensors)
 
@@ -128,6 +128,8 @@ class Replay(object):
         self._prob_hist_data = None
         self._decision_boundary_data = None
         self._weights_violins_data = None
+        self._activations_violins_data = None
+        self._zvalues_violins_data = None
         # Attributes for the visualizations - Plot objects
         self._feature_space_plot = None
         self._loss_hist_plot = None
@@ -135,6 +137,8 @@ class Replay(object):
         self._prob_hist_plot = None
         self._decision_boundary_plot = None
         self._weights_violins_plot = None
+        self._activations_violins_plot = None
+        self._zvalues_violins_plot = None
 
     def _retrieve_weights(self):
         # Retrieves weights for each layer and sequence of weights
@@ -230,8 +234,61 @@ class Replay(object):
         probas = np.array(probas)
         return probas
 
+    def build_outputs_violins(self, ax, before_activation=False, epoch_start=0, epoch_end=-1):
+        """Builds a LayerViolins object to be used for plotting and
+        animating.
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        before_activation: Boolean, optional
+            If True, returns Z-values, that is, before applying
+            the activation function.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        activations_violins_plot: LayerViolins
+            An instance of a LayerViolins object to make plots and
+            animations.
+        """
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        if before_activation:
+            title = 'Z-values'
+            names = self._z_layers
+        else:
+            title = 'Activations'
+            names = self._activation_layers
+        outputs = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            weights = self.weights[epoch]
+            inputs = [self.learning_phase, self.inputs] + weights
+            if before_activation:
+                outputs.append(self._get_zvalues(inputs=inputs))
+            else:
+                outputs.append(self._get_activations(inputs=inputs))
+
+        layers = [layer.name for layer, weights in zip(self.model.layers, self.weights[0]) if len(weights) in (1, 2)]
+        data = LayerViolinsData(names=names, values=outputs, layers=layers)
+        plot = LayerViolins(ax, title).load_data(data)
+        if before_activation:
+            self._zvalues_violins_data = data
+            self._zvalues_violins_plot = plot
+        else:
+            self._activations_violins_data = data
+            self._activations_violins_plot = plot
+        return plot
+
     def build_weights_violins(self, ax, epoch_start=0, epoch_end=-1):
-        """Builds a WeightsViolins object to be used for plotting and
+        """Builds a LayerViolins object to be used for plotting and
         animating.
 
         Parameters
@@ -245,8 +302,8 @@ class Replay(object):
 
         Returns
         -------
-        weights_violins_plot: WeightsViolins
-            An instance of a WeightsViolins object to make plots and
+        weights_violins_plot: LayerViolins
+            An instance of a LayerViolins object to make plots and
             animations.
         """
         if epoch_end == -1:
@@ -259,8 +316,8 @@ class Replay(object):
         for epoch in range(epoch_start, epoch_end + 1):
             weights.append(list(filter(lambda weights: len(weights) in (1, 2), self.weights[epoch])))
 
-        self._weights_violins_data = WeightsViolinsData(names=names, weights=weights)
-        self._weights_violins_plot = WeightsViolins(ax).load_data(self._weights_violins_data)
+        self._weights_violins_data = LayerViolinsData(names=names, values=weights, layers=names)
+        self._weights_violins_plot = LayerViolins(ax, 'Weights').load_data(self._weights_violins_data)
         return self._weights_violins_plot
 
     def build_loss_histogram(self, ax, epoch_start=0, epoch_end=-1):

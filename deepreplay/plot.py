@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 from collections import namedtuple
 from matplotlib import animation
-matplotlib.rcParams['animation.writer'] = 'ffmpeg'
+matplotlib.rcParams['animation.writer'] = 'avconv'
 sns.set_style('white')
 
 FeatureSpaceData = namedtuple('FeatureSpaceData', ['line', 'bent_line', 'prediction', 'target'])
@@ -15,7 +15,7 @@ FeatureSpaceLines = namedtuple('FeatureSpaceLines', ['grid', 'input', 'contour']
 LossAndMetricData = namedtuple('LossAndMetricData', ['loss', 'metric', 'metric_name'])
 ProbHistogramData = namedtuple('ProbHistogramData', ['prob', 'target'])
 LossHistogramData = namedtuple('LossHistogramData', ['loss'])
-WeightsViolinsData = namedtuple('WeightsViolinsData', ['names', 'weights'])
+LayerViolinsData = namedtuple('LayerViolinsData', ['names', 'values', 'layers'])
 
 def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
     """Returns a 2D grid of boundaries given by `xlim` and `ylim`,
@@ -592,17 +592,21 @@ class LossHistogram(Basic):
 
         return lh.line
 
-class WeightsViolins(Basic):
-    def __init__(self, ax):
-        super(WeightsViolins, self).__init__(ax)
-        self.weights = None
+class LayerViolins(Basic):
+    def __init__(self, ax, title):
+        super(LayerViolins, self).__init__(ax)
+        self.values = None
         self.names = None
-        self._title = 'Weights'
+        self._title = title
 
-    def load_data(self, weights_violins_data):
-        self.weights = weights_violins_data.weights
-        self.names = weights_violins_data.names
-        self.n_epochs = len(self.weights)
+    def load_data(self, layer_violins_data):
+        self.values = layer_violins_data.values
+        self.names = layer_violins_data.names
+        self.layers = ['inputs'] + layer_violins_data.layers
+        self.palette = dict(zip(self.layers, sns.palettes.husl_palette(len(self.layers), .7)))
+        self.n_epochs = len(self.values)
+        _flat_values = np.array([np.concatenate([v.ravel() for v in epoch]) for epoch in self.values])
+        self.ylim = [_flat_values.min(), _flat_values.max()]
         self._prepare_plot()
         return self
 
@@ -610,18 +614,20 @@ class WeightsViolins(Basic):
         self.line = self.ax.plot([], [])
 
     @staticmethod
-    def _update(i, wv, epoch_start=0):
+    def _update(i, lv, epoch_start=0):
         epoch = i + epoch_start
 
-        df = pd.concat([pd.DataFrame(layer_weights[0].ravel(),
-                                     columns=[layer_name]).melt(var_name='layers', value_name='weights')
-                        for layer_name, layer_weights in zip(wv.names, wv.weights[i])])
+        df = pd.concat([pd.DataFrame(layer_values.ravel(),
+                                     columns=[layer_name]).melt(var_name='layers', value_name='values')
+                        for layer_name, layer_values in zip(lv.names, lv.values[i])])
 
-        sns.violinplot(data=df, x='layers', y='weights', ax=wv.ax)
-        wv.ax.set_xticklabels(wv.names)
-        wv.ax.set_xlabel('Layers')
-        wv.ax.set_ylabel('Weights')
-        wv.ax.set_title('{} - Epoch: {}'.format(wv.title[0], epoch))
+        lv.ax.clear()
+        sns.violinplot(data=df, x='layers', y='values', ax=lv.ax, cut=0, palette=lv.palette, scale='width')
+        lv.ax.set_xticklabels(lv.names)
+        lv.ax.set_xlabel('Layers')
+        lv.ax.set_ylabel(lv._title)
+        lv.ax.set_ylim(lv.ylim)
+        lv.ax.set_title('{} - Epoch: {}'.format(lv.title[0], epoch))
 
-        return wv.line
+        return lv.line
 
