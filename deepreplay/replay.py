@@ -9,6 +9,9 @@ from .plot import (
 from .plot import (
     FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData, LayerViolinsData
 )
+from .utils import make_batches, slice_arrays
+from itertools import groupby
+from operator import itemgetter
 
 TRAINING_MODE = 1
 TEST_MODE = 0
@@ -102,6 +105,13 @@ class Replay(object):
                                                    outputs=[K.binary_crossentropy(self.model.targets[0],
                                                                                   self.model.outputs[0])])
 
+        self.__trainable_weights = [w for layer in self.model.layers
+                                    for w in layer.trainable_weights if layer.trainable]
+        self.__trainable_gradients = self.model.optimizer.get_gradients(self.model.total_loss, self.__trainable_weights)
+        self._get_gradients = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.targets +
+                                                self._model_weights + self.model.sample_weights,
+                                         outputs=self.__trainable_gradients)
+
         __activation_tensors = list(filter(lambda t: t[1].op.type.lower() in ACTIVATIONS,
                                            [(self.model.layers[i].name, self.model.layers[i].output)
                                             for i in range(self.n_layers)]))
@@ -121,6 +131,9 @@ class Replay(object):
         self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                        outputs=self._z_tensors)
 
+        self.weights_layers = [layer.name for layer, weights in zip(self.model.layers, self.n_weights)
+                               if len(weights) in (1, 2)]
+
         # Attributes for the visualizations - Data
         self._feature_space_data = None
         self._loss_hist_data = None
@@ -130,6 +143,7 @@ class Replay(object):
         self._weights_violins_data = None
         self._activations_violins_data = None
         self._zvalues_violins_data = None
+        self._gradients_data = None
         # Attributes for the visualizations - Plot objects
         self._feature_space_plot = None
         self._loss_hist_plot = None
@@ -139,6 +153,33 @@ class Replay(object):
         self._weights_violins_plot = None
         self._activations_violins_plot = None
         self._zvalues_violins_plot = None
+        self._gradients_plot = None
+
+    def _make_batches(self, seed):
+        inputs = self.inputs[:]
+        targets = self.targets[:]
+
+        np.random.seed(seed)
+        np.random.shuffle(inputs)
+        np.random.shuffle(targets)
+        num_training_samples = inputs.shape[0]
+
+        batches = make_batches(num_training_samples, self.params['batch_size'])
+        index_array = np.arange(num_training_samples)
+
+        inputs_batches = []
+        targets_batches = []
+        for batch_index, (batch_start, batch_end) in enumerate(batches):
+            batch_ids = index_array[batch_start:batch_end]
+            inputs_batch, targets_batch = slice_arrays([inputs, targets], batch_ids)
+            inputs_batches.append(inputs_batch)
+            targets_batches.append(targets_batch)
+
+        return inputs_batches, targets_batches
+
+    @staticmethod
+    def __assign_gradients_to_layers(layers, gradients):
+        return [list(list(zip(*g))[1]) for k, g in groupby(zip(layers, gradients), itemgetter(0))]
 
     def _retrieve_weights(self):
         # Retrieves weights for each layer and sequence of weights
@@ -234,6 +275,27 @@ class Replay(object):
         probas = np.array(probas)
         return probas
 
+    def build_gradients(self, ax, include_output=True, epoch_start=0, epoch_end=-1):
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        gradient_names = [layer.name for layer in self.model.layers for _ in layer.trainable_weights if layer.trainable]
+        gradients = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            weights = self.weights[epoch]
+
+            # Sample weights fixed to one!
+            inputs = [self.learning_phase, self.inputs, self.targets] + weights + [np.ones(shape=self.inputs.shape[0])]
+            grad = [w for v in Replay.__assign_gradients_to_layers(gradient_names, self._get_gradients(inputs=inputs))
+                    for w in v]
+            gradients.append(grad)
+
+        self._gradients_data = LayerViolinsData(names=gradient_names, values=gradients, layers=self.weights_layers)
+        self._gradients_plot = LayerViolins(ax, 'Gradients').load_data(self._gradients_data)
+        return self._gradients_plot
+
     def build_outputs_violins(self, ax, before_activation=False, epoch_start=0, epoch_end=-1):
         """Builds a LayerViolins object to be used for plotting and
         animating.
@@ -276,8 +338,7 @@ class Replay(object):
             else:
                 outputs.append(self._get_activations(inputs=inputs))
 
-        layers = [layer.name for layer, weights in zip(self.model.layers, self.weights[0]) if len(weights) in (1, 2)]
-        data = LayerViolinsData(names=names, values=outputs, layers=layers)
+        data = LayerViolinsData(names=names, values=outputs, layers=self.weights_layers)
         plot = LayerViolins(ax, title).load_data(data)
         if before_activation:
             self._zvalues_violins_data = data
@@ -310,13 +371,19 @@ class Replay(object):
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
 
-        names = [layer.name for layer, weights in zip(self.model.layers, self.weights[0]) if len(weights) in (1, 2)]
+        names = [layer.name for layer, weights in zip(self.model.layers, self.n_weights) for _ in weights
+                 if len(weights) in (1, 2)]
+        n_weights = [len(weights) for layer, weights in zip(self.model.layers, self.n_weights) for _ in weights]
+
         weights = []
         # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end + 1):
-            weights.append(list(filter(lambda weights: len(weights) in (1, 2), self.weights[epoch])))
+            weights.append([w for w, n in zip(self.weights[epoch], n_weights) if n in (1, 2)])
+            #weights.append(list(filter(lambda weights: len(weights) in (1, 2), self.weights[epoch])))
 
-        self._weights_violins_data = LayerViolinsData(names=names, values=weights, layers=names)
+        self._weights_violins_data = LayerViolinsData(names=names,
+                                                      values=weights,
+                                                      layers=self.weights_layers)
         self._weights_violins_plot = LayerViolins(ax, 'Weights').load_data(self._weights_violins_data)
         return self._weights_violins_plot
 

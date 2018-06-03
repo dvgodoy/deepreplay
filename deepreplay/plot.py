@@ -605,8 +605,6 @@ class LayerViolins(Basic):
         self.layers = ['inputs'] + layer_violins_data.layers
         self.palette = dict(zip(self.layers, sns.palettes.husl_palette(len(self.layers), .7)))
         self.n_epochs = len(self.values)
-        _flat_values = np.array([np.concatenate([v.ravel() for v in epoch]) for epoch in self.values])
-        self.ylim = [_flat_values.min(), _flat_values.max()]
         self._prepare_plot()
         return self
 
@@ -615,18 +613,20 @@ class LayerViolins(Basic):
 
     @staticmethod
     def _update(i, lv, epoch_start=0):
+        assert len(lv.names) == len(lv.values[i]), "Layer names and values have different lengths!"
         epoch = i + epoch_start
 
         df = pd.concat([pd.DataFrame(layer_values.ravel(),
                                      columns=[layer_name]).melt(var_name='layers', value_name='values')
                         for layer_name, layer_values in zip(lv.names, lv.values[i])])
+        df = df.query('layers != "{}"'.format(lv.names[-1]))
 
         lv.ax.clear()
         sns.violinplot(data=df, x='layers', y='values', ax=lv.ax, cut=0, palette=lv.palette, scale='width')
-        lv.ax.set_xticklabels(lv.names)
+        lv.ax.set_xticklabels(df.layers.unique())
         lv.ax.set_xlabel('Layers')
         lv.ax.set_ylabel(lv._title)
-        lv.ax.set_ylim(lv.ylim)
+        lv.ax.set_ylim([df['values'].min(), df['values'].max()])
         lv.ax.set_title('{} - Epoch: {}'.format(lv.title[0], epoch))
 
         return lv.line
