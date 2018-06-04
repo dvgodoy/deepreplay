@@ -55,24 +55,41 @@ class Replay(object):
         animating; namedtuple containing information about
         classification probabilities and targets.
 
+    weights_violins:
+
+    activations_violins:
+
+    zvalues_violins:
+
+    gradients_violins:
+
     training_loss: ndarray
         An array of shape (n_epochs, ) with training loss as reported
         by Keras at the end of each epoch.
+
+    learning_rate: ndarray
+        An array of shape (n_epochs, ) with learning rate as reported
+        by Keras at the beginning of each epoch.
     """
     def __init__(self, replay_filename, group_name, model_filename=''):
         # Set learning phase to TEST
         self.learning_phase = TEST_MODE
 
+        # Loads ReplayData file
+        self.replay_data = h5py.File('{}'.format(replay_filename), 'r')
+        try:
+            self.group = self.replay_data[group_name]
+        except KeyError:
+            self.group = self.replay_data[group_name + '_init']
+            group_name += '_init'
+
+        self.group_name = group_name
+
         # If not informed, defaults to '_model' suffix
         if model_filename == '':
             model_filename = '{}_model.h5'.format(group_name)
-
         # Loads Keras model
         self.model = load_model(model_filename)
-        # Loads ReplayData file
-        self.replay_data = h5py.File('{}'.format(replay_filename), 'r')
-        self.group_name = group_name
-        self.group = self.replay_data[self.group_name]
 
         # Retrieves some basic information from the replay data
         self.inputs = self.group['inputs'][:]
@@ -105,6 +122,8 @@ class Replay(object):
                                                    outputs=[K.binary_crossentropy(self.model.targets[0],
                                                                                   self.model.outputs[0])])
 
+        # Keras function to compute the gradients for trainable weights, given inputs, targets, weights and
+        # sample weights
         self.__trainable_weights = [w for layer in self.model.layers
                                     for w in layer.trainable_weights if layer.trainable]
         self.__trainable_gradients = self.model.optimizer.get_gradients(self.model.total_loss, self.__trainable_weights)
@@ -112,25 +131,27 @@ class Replay(object):
                                                 self._model_weights + self.model.sample_weights,
                                          outputs=self.__trainable_gradients)
 
+        # Keras function to compute the activation values given inputs and weights
         __activation_tensors = list(filter(lambda t: t[1].op.type.lower() in ACTIVATIONS,
                                            [(self.model.layers[i].name, self.model.layers[i].output)
                                             for i in range(self.n_layers)]))
-
-        __z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
-                                  [(self.model.layers[i - (self.model.layers[i].input.op.type in
-                                                           ['BiasAdd', 'MatMul'])].name,
-                                    self.model.layers[i].output.op.inputs[0]) for i in range(self.n_layers)]))
-
         self._activation_layers = ['inputs'] + list(map(lambda t: t[0], __activation_tensors))
         self._activation_tensors = self.model.inputs + list(map(lambda t: t[1], __activation_tensors))
         self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                            outputs=self._activation_tensors)
 
+        # Keras function to compute the Z values given inputs and weights
+        __z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
+                                  [(self.model.layers[i - (self.model.layers[i].input.op.type in
+                                                           ['BiasAdd', 'MatMul'])].name,
+                                    self.model.layers[i].output.op.inputs[0]) for i in range(self.n_layers)]))
         self._z_layers = ['inputs'] + list(map(lambda t: t[0], __z_tensors))
         self._z_tensors = self.model.inputs + list(map(lambda t: t[1], __z_tensors))
         self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                        outputs=self._z_tensors)
 
+        # Gets names of all layers with arrays of weights of lengths 1 (no biases) or 2 (with biases)
+        # Layers without weights (e.g. Activation, BatchNorm) are not included
         self.weights_layers = [layer.name for layer, weights in zip(self.model.layers, self.n_weights)
                                if len(weights) in (1, 2)]
 
@@ -220,8 +241,28 @@ class Replay(object):
         return self._prob_hist_plot, self._prob_hist_data
 
     @property
+    def weights_violins(self):
+        return self._weights_violins_plot, self._weights_violins_data
+
+    @property
+    def activations_violins(self):
+        return self._activations_violins_plot, self._activations_violins_data
+
+    @property
+    def zvalues_violins(self):
+        return self._zvalues_violins_plot, self._zvalues_violins_data
+
+    @property
+    def gradients_violins(self):
+        return self._gradients_plot, self._gradients_data
+
+    @property
     def training_loss(self):
         return self.group['loss'][:]
+
+    @property
+    def learning_rate(self):
+        return self.group['lr'][:]
 
     def get_training_metric(self, metric_name):
         """Returns corresponding metric as reported by Keras at the
@@ -275,7 +316,30 @@ class Replay(object):
         probas = np.array(probas)
         return probas
 
-    def build_gradients(self, ax, include_output=True, epoch_start=0, epoch_end=-1):
+    def build_gradients(self, ax, layer_names=None, exclude_outputs=True, epoch_start=0, epoch_end=-1):
+        """Builds a LayerViolins object to be used for plotting and
+        animating.
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        layer_names: list of Strings, optional
+            If informed, plots only the listed layers.
+        exclude_outputs: boolean, optional
+            If True, excludes distribution of output layer. Default is True.
+            If `layer_names` is informed, `exclude_outputs` is ignored.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        gradients_plot: LayerViolins
+            An instance of a LayerViolins object to make plots and
+            animations.
+        """
         if epoch_end == -1:
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
@@ -292,11 +356,18 @@ class Replay(object):
                     for w in v]
             gradients.append(grad)
 
-        self._gradients_data = LayerViolinsData(names=gradient_names, values=gradients, layers=self.weights_layers)
+        if layer_names is None:
+            layer_names = self.weights_layers
+            if exclude_outputs:
+                layer_names = layer_names[:-1]
+
+        self._gradients_data = LayerViolinsData(names=gradient_names, values=gradients, layers=self.weights_layers,
+                                                selected_layers=layer_names)
         self._gradients_plot = LayerViolins(ax, 'Gradients').load_data(self._gradients_data)
         return self._gradients_plot
 
-    def build_outputs_violins(self, ax, before_activation=False, epoch_start=0, epoch_end=-1):
+    def build_outputs_violins(self, ax, before_activation=False, layer_names=None, include_inputs=True,
+                              exclude_outputs=True, epoch_start=0, epoch_end=-1):
         """Builds a LayerViolins object to be used for plotting and
         animating.
 
@@ -307,6 +378,13 @@ class Replay(object):
         before_activation: Boolean, optional
             If True, returns Z-values, that is, before applying
             the activation function.
+        layer_names: list of Strings, optional
+            If informed, plots only the listed layers.
+        include_inputs: boolean, optional
+            If True, includes distribution of inputs. Default is True.
+        exclude_outputs: boolean, optional
+            If True, excludes distribution of output layer. Default is True.
+            If `layer_names` is informed, `exclude_outputs` is ignored.
         epoch_start: int, optional
             First epoch to consider.
         epoch_end: int, optional
@@ -314,7 +392,7 @@ class Replay(object):
 
         Returns
         -------
-        activations_violins_plot: LayerViolins
+        activations_violins_plot/zvalues_violins_plot: LayerViolins
             An instance of a LayerViolins object to make plots and
             animations.
         """
@@ -338,7 +416,14 @@ class Replay(object):
             else:
                 outputs.append(self._get_activations(inputs=inputs))
 
-        data = LayerViolinsData(names=names, values=outputs, layers=self.weights_layers)
+        if layer_names is None:
+            layer_names = self.weights_layers
+            if exclude_outputs:
+                layer_names = layer_names[:-1]
+        if include_inputs:
+            layer_names = ['inputs'] + layer_names
+
+        data = LayerViolinsData(names=names, values=outputs, layers=self.weights_layers, selected_layers=layer_names)
         plot = LayerViolins(ax, title).load_data(data)
         if before_activation:
             self._zvalues_violins_data = data
@@ -348,7 +433,7 @@ class Replay(object):
             self._activations_violins_plot = plot
         return plot
 
-    def build_weights_violins(self, ax, epoch_start=0, epoch_end=-1):
+    def build_weights_violins(self, ax, layer_names=None, exclude_outputs=True, epoch_start=0, epoch_end=-1):
         """Builds a LayerViolins object to be used for plotting and
         animating.
 
@@ -356,6 +441,11 @@ class Replay(object):
         ----------
         ax: AxesSubplot
             Subplot of a Matplotlib figure.
+        layer_names: list of Strings, optional
+            If informed, plots only the listed layers.
+        exclude_outputs: boolean, optional
+            If True, excludes distribution of output layer. Default is True.
+            If `layer_names` is informed, `exclude_outputs` is ignored.
         epoch_start: int, optional
             First epoch to consider.
         epoch_end: int, optional
@@ -379,11 +469,16 @@ class Replay(object):
         # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end + 1):
             weights.append([w for w, n in zip(self.weights[epoch], n_weights) if n in (1, 2)])
-            #weights.append(list(filter(lambda weights: len(weights) in (1, 2), self.weights[epoch])))
+
+        if layer_names is None:
+            layer_names = self.weights_layers
+            if exclude_outputs:
+                layer_names = layer_names[:-1]
 
         self._weights_violins_data = LayerViolinsData(names=names,
                                                       values=weights,
-                                                      layers=self.weights_layers)
+                                                      layers=self.weights_layers,
+                                                      selected_layers=layer_names)
         self._weights_violins_plot = LayerViolins(ax, 'Weights').load_data(self._weights_violins_data)
         return self._weights_violins_plot
 

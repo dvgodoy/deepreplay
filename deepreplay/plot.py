@@ -15,7 +15,7 @@ FeatureSpaceLines = namedtuple('FeatureSpaceLines', ['grid', 'input', 'contour']
 LossAndMetricData = namedtuple('LossAndMetricData', ['loss', 'metric', 'metric_name'])
 ProbHistogramData = namedtuple('ProbHistogramData', ['prob', 'target'])
 LossHistogramData = namedtuple('LossHistogramData', ['loss'])
-LayerViolinsData = namedtuple('LayerViolinsData', ['names', 'values', 'layers'])
+LayerViolinsData = namedtuple('LayerViolinsData', ['names', 'values', 'layers', 'selected_layers'])
 
 def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
     """Returns a 2D grid of boundaries given by `xlim` and `ylim`,
@@ -603,6 +603,7 @@ class LayerViolins(Basic):
         self.values = layer_violins_data.values
         self.names = layer_violins_data.names
         self.layers = ['inputs'] + layer_violins_data.layers
+        self.selected_layers = layer_violins_data.selected_layers
         self.palette = dict(zip(self.layers, sns.palettes.husl_palette(len(self.layers), .7)))
         self.n_epochs = len(self.values)
         self._prepare_plot()
@@ -619,7 +620,7 @@ class LayerViolins(Basic):
         df = pd.concat([pd.DataFrame(layer_values.ravel(),
                                      columns=[layer_name]).melt(var_name='layers', value_name='values')
                         for layer_name, layer_values in zip(lv.names, lv.values[i])])
-        df = df.query('layers != "{}"'.format(lv.names[-1]))
+        df = df[df.isin({'layers': lv.selected_layers}).values]
 
         lv.ax.clear()
         sns.violinplot(data=df, x='layers', y='values', ax=lv.ax, cut=0, palette=lv.palette, scale='width')
