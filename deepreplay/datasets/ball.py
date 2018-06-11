@@ -1,14 +1,12 @@
 import numpy as np
 
-def load_data(n_dims=10, radius=2.0, n_points=1000, only_sphere=False, shuffle=True, seed=13):
+def load_data(n_dims=10, n_points=1000, only_sphere=False, shuffle=True, seed=13):
     """
 
     Parameters
     ----------
     n_dims: int, optional
         Number of dimensions of the n-ball. Default is 10.
-    radius: float, optional
-        Radius of the n-ball. Default is 2.0.
     n_points: int, optional
         Number of points in each parabola. Default is 1,000.
     only_sphere: boolean
@@ -27,12 +25,17 @@ def load_data(n_dims=10, radius=2.0, n_points=1000, only_sphere=False, shuffle=T
         y is an array of shape (n_points, 1) containing the
         classes of the samples.
     """
-    points = np.random.normal(size=(1000, n_dims))
-    sphere = points / np.linalg.norm(points, axis=1).reshape(-1, 1)
+    radius = np.sqrt(n_dims)
+    points = np.random.normal(size=(n_points, n_dims))
+    sphere = radius * points / np.linalg.norm(points, axis=1).reshape(-1, 1)
     if only_sphere:
         X = sphere
     else:
-        X = radius * sphere * np.random.uniform(size=(n_points, 1))**(1 / n_dims)
+        X = sphere * np.random.uniform(size=(n_points, 1))**(1 / n_dims)
+
+    adjustment = 1 / np.std(X)
+    radius *= adjustment
+    X *= adjustment
 
     y = (np.abs(np.sum(X, axis=1)) > (radius / 2.0)).astype(np.int)
 

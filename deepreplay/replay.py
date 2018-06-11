@@ -140,13 +140,33 @@ class Replay(object):
         self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                            outputs=self._activation_tensors)
 
+        #__z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
+        #                          [(self.model.layers[i - (self.model.layers[i].input.op.type in
+        #                                                   ['BiasAdd', 'MatMul'])].name,
+        #                            self.model.layers[i].output.op.inputs[0]) for i in range(self.n_layers)]))
+        #self._z_layers = ['inputs'] + list(map(lambda t: t[0], __z_tensors))
+        #self._z_tensors = self.model.inputs + list(map(lambda t: t[1], __z_tensors))
+
+        self._z_layers = ['inputs']
+        self._z_tensors = self.model.inputs[:]
+        for i in range(self.n_layers):
+            layer_inputs = self.model.layers[i].input
+            try:
+                layer_output_inputs = self.model.layers[i].output.op.inputs
+            except AttributeError:
+                layer_output_inputs = []
+
+            if not isinstance(layer_inputs, list):
+                layer_inputs = [layer_inputs]
+
+            for layer_input in layer_inputs:
+                op_type = layer_input.op.type
+                for layer_output_input in layer_output_inputs:
+                    if layer_output_input.op.type in ['BiasAdd', 'MatMul']:
+                        self._z_tensors.append(layer_output_input)
+                        self._z_layers.append(self.model.layers[i - (op_type in ['BiasAdd', 'MatMul'])].name)
+
         # Keras function to compute the Z values given inputs and weights
-        __z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
-                                  [(self.model.layers[i - (self.model.layers[i].input.op.type in
-                                                           ['BiasAdd', 'MatMul'])].name,
-                                    self.model.layers[i].output.op.inputs[0]) for i in range(self.n_layers)]))
-        self._z_layers = ['inputs'] + list(map(lambda t: t[0], __z_tensors))
-        self._z_tensors = self.model.inputs + list(map(lambda t: t[1], __z_tensors))
         self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                        outputs=self._z_tensors)
 
