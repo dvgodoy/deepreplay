@@ -131,14 +131,12 @@ class Replay(object):
                                                 self._model_weights + self.model.sample_weights,
                                          outputs=self.__trainable_gradients)
 
-        # Keras function to compute the activation values given inputs and weights
+        """
         __activation_tensors = list(filter(lambda t: t[1].op.type.lower() in ACTIVATIONS,
                                            [(self.model.layers[i].name, self.model.layers[i].output)
                                             for i in range(self.n_layers)]))
         self._activation_layers = ['inputs'] + list(map(lambda t: t[0], __activation_tensors))
         self._activation_tensors = self.model.inputs + list(map(lambda t: t[1], __activation_tensors))
-        self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
-                                           outputs=self._activation_tensors)
 
         #__z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
         #                          [(self.model.layers[i - (self.model.layers[i].input.op.type in
@@ -165,10 +163,31 @@ class Replay(object):
                     if layer_output_input.op.type in ['BiasAdd', 'MatMul']:
                         self._z_tensors.append(layer_output_input)
                         self._z_layers.append(self.model.layers[i - (op_type in ['BiasAdd', 'MatMul'])].name)
+        """
+
+        __z_layers = np.array([i for i, layer in enumerate(self.model.layers)
+                               if (layer.output.op.type in ['BiasAdd', 'MatMul', 'Add'])
+                               or (layer.output.op.inputs[0].op.type in ['BiasAdd', 'MatMul', 'Add'])])
+        __act_layers = np.array([i for i, layer in enumerate(self.model.layers)
+                               if layer.output.op.type.lower() in ACTIVATIONS])
+        __z_layers = [__z_layers[np.argmax(layer < __z_layers) - 1] for layer in __act_layers]
+        self.z_act_layers = [self.model.layers[i].name for i in __z_layers]
+
+        self._z_layers = ['inputs'] + [self.model.layers[i].name for i in __z_layers]
+        self._z_tensors = self.model.inputs + [output
+                                               if output.op.type in ['BiasAdd', 'MatMul', 'Add']
+                                               else output.op.inputs[0]
+                                               for output in [self.model.layers[i].output for i in __z_layers]]
+
+        self._activation_layers = ['inputs'] + [self.model.layers[i].name for i in __act_layers]
+        self._activation_tensors = self.model.inputs + [self.model.layers[i].output for i in __act_layers]
 
         # Keras function to compute the Z values given inputs and weights
         self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
                                        outputs=self._z_tensors)
+        # Keras function to compute the activation values given inputs and weights
+        self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
+                                           outputs=self._activation_tensors)
 
         # Gets names of all layers with arrays of weights of lengths 1 (no biases) or 2 (with biases)
         # Layers without weights (e.g. Activation, BatchNorm) are not included
@@ -437,13 +456,13 @@ class Replay(object):
                 outputs.append(self._get_activations(inputs=inputs))
 
         if layer_names is None:
-            layer_names = self.weights_layers
+            layer_names = self.z_act_layers
             if exclude_outputs:
                 layer_names = layer_names[:-1]
         if include_inputs:
             layer_names = ['inputs'] + layer_names
 
-        data = LayerViolinsData(names=names, values=outputs, layers=self.weights_layers, selected_layers=layer_names)
+        data = LayerViolinsData(names=names, values=outputs, layers=self.z_act_layers, selected_layers=layer_names)
         plot = LayerViolins(ax, title).load_data(data)
         if before_activation:
             self._zvalues_violins_data = data
