@@ -132,40 +132,6 @@ class Replay(object):
                                                 self._model_weights + self.model.sample_weights,
                                          outputs=self.__trainable_gradients)
 
-        """
-        __activation_tensors = list(filter(lambda t: t[1].op.type.lower() in ACTIVATIONS,
-                                           [(self.model.layers[i].name, self.model.layers[i].output)
-                                            for i in range(self.n_layers)]))
-        self._activation_layers = ['inputs'] + list(map(lambda t: t[0], __activation_tensors))
-        self._activation_tensors = self.model.inputs + list(map(lambda t: t[1], __activation_tensors))
-
-        #__z_tensors = list(filter(lambda t: t[1].op.type in ['BiasAdd', 'MatMul'],
-        #                          [(self.model.layers[i - (self.model.layers[i].input.op.type in
-        #                                                   ['BiasAdd', 'MatMul'])].name,
-        #                            self.model.layers[i].output.op.inputs[0]) for i in range(self.n_layers)]))
-        #self._z_layers = ['inputs'] + list(map(lambda t: t[0], __z_tensors))
-        #self._z_tensors = self.model.inputs + list(map(lambda t: t[1], __z_tensors))
-
-        self._z_layers = ['inputs']
-        self._z_tensors = self.model.inputs[:]
-        for i in range(self.n_layers):
-            layer_inputs = self.model.layers[i].input
-            try:
-                layer_output_inputs = self.model.layers[i].output.op.inputs
-            except AttributeError:
-                layer_output_inputs = []
-
-            if not isinstance(layer_inputs, list):
-                layer_inputs = [layer_inputs]
-
-            for layer_input in layer_inputs:
-                op_type = layer_input.op.type
-                for layer_output_input in layer_output_inputs:
-                    if layer_output_input.op.type in ['BiasAdd', 'MatMul']:
-                        self._z_tensors.append(layer_output_input)
-                        self._z_layers.append(self.model.layers[i - (op_type in ['BiasAdd', 'MatMul'])].name)
-        """
-
         def get_z_op(layer):
             op = layer.output.op
             if op.type in Z_OPS:
@@ -178,10 +144,6 @@ class Replay(object):
                         return input
                 return None
 
-        #__z_layers = np.array([i for i, layer in enumerate(self.model.layers)
-        #                       if (layer.output.op.type in Z_OPS)
-        #                       or ((layer.output.op.inputs[0].op.type in Z_OPS) and
-        #                           (layer.output.op.name.split('/')[0] == layer.output.op.inputs[0].name.split('/')[0]))])
         __z_layers = np.array([i for i, layer in enumerate(self.model.layers) if get_z_op(layer) is not None])
         __act_layers = np.array([i for i, layer in enumerate(self.model.layers)
                                if layer.output.op.type.lower() in ACTIVATIONS])
@@ -189,10 +151,8 @@ class Replay(object):
         self.z_act_layers = [self.model.layers[i].name for i in __z_layers]
 
         self._z_layers = ['inputs'] + [self.model.layers[i].name for i in __z_layers]
-        #self._z_tensors = self.model.inputs + [output if output.op.type in Z_OPS else output.op.inputs[0]
-        #                                       for output in [self.model.layers[i].output for i in __z_layers]]
-        self._z_tensors = self.model.inputs + filter(lambda t: t is not None,
-                                                     [get_z_op(self.model.layers[i]) for i in __z_layers])
+        self._z_tensors = self.model.inputs + list(filter(lambda t: t is not None,
+                                                          [get_z_op(self.model.layers[i]) for i in __z_layers]))
 
         self._activation_layers = ['inputs'] + [self.model.layers[i].name for i in __act_layers]
         self._activation_tensors = self.model.inputs + [self.model.layers[i].output for i in __act_layers]

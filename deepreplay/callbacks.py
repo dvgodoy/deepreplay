@@ -36,7 +36,7 @@ class ReplayData(Callback):
         super(ReplayData, self).__init__()
         self.handler = h5py.File('{}'.format(filename), 'a')
         self.inputs = inputs
-        self.targets = targets.reshape(-1, 1)
+        self.targets = targets.reshape(len(targets), -1)
         self.filepath = os.path.split(filename)[0]
         self.filename = filename
         self.group = None
