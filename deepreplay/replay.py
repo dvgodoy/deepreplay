@@ -16,6 +16,7 @@ from operator import itemgetter
 TRAINING_MODE = 1
 TEST_MODE = 0
 ACTIVATIONS = ['softmax', 'relu', 'elu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear', 'softplus', 'softsign', 'selu']
+Z_OPS = ['BiasAdd', 'MatMul', 'Add']
 
 
 class Replay(object):
@@ -165,19 +166,33 @@ class Replay(object):
                         self._z_layers.append(self.model.layers[i - (op_type in ['BiasAdd', 'MatMul'])].name)
         """
 
-        __z_layers = np.array([i for i, layer in enumerate(self.model.layers)
-                               if (layer.output.op.type in ['BiasAdd', 'MatMul', 'Add'])
-                               or (layer.output.op.inputs[0].op.type in ['BiasAdd', 'MatMul', 'Add'])])
+        def get_z_op(layer):
+            op = layer.output.op
+            if op.type in Z_OPS:
+                return layer.output
+            else:
+                op_layer_name = op.name.split('/')[0]
+                for input in op.inputs:
+                    input_layer_name = input.name.split('/')[0]
+                    if (input.op.type in Z_OPS) and (op_layer_name == input_layer_name):
+                        return input
+                return None
+
+        #__z_layers = np.array([i for i, layer in enumerate(self.model.layers)
+        #                       if (layer.output.op.type in Z_OPS)
+        #                       or ((layer.output.op.inputs[0].op.type in Z_OPS) and
+        #                           (layer.output.op.name.split('/')[0] == layer.output.op.inputs[0].name.split('/')[0]))])
+        __z_layers = np.array([i for i, layer in enumerate(self.model.layers) if get_z_op(layer) is not None])
         __act_layers = np.array([i for i, layer in enumerate(self.model.layers)
                                if layer.output.op.type.lower() in ACTIVATIONS])
-        __z_layers = [__z_layers[np.argmax(layer < __z_layers) - 1] for layer in __act_layers]
+        __z_layers = np.array([__z_layers[np.argmax(layer < __z_layers) - 1] for layer in __act_layers])
         self.z_act_layers = [self.model.layers[i].name for i in __z_layers]
 
         self._z_layers = ['inputs'] + [self.model.layers[i].name for i in __z_layers]
-        self._z_tensors = self.model.inputs + [output
-                                               if output.op.type in ['BiasAdd', 'MatMul', 'Add']
-                                               else output.op.inputs[0]
-                                               for output in [self.model.layers[i].output for i in __z_layers]]
+        #self._z_tensors = self.model.inputs + [output if output.op.type in Z_OPS else output.op.inputs[0]
+        #                                       for output in [self.model.layers[i].output for i in __z_layers]]
+        self._z_tensors = self.model.inputs + filter(lambda t: t is not None,
+                                                     [get_z_op(self.model.layers[i]) for i in __z_layers])
 
         self._activation_layers = ['inputs'] + [self.model.layers[i].name for i in __act_layers]
         self._activation_tensors = self.model.inputs + [self.model.layers[i].output for i in __act_layers]
