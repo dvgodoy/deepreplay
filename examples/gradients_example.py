@@ -101,3 +101,29 @@ for y, yname in zip(ys, ['y', 'y0', 'y1', 'yr']):
             gstd = replay.gradients_std[0][:-1]
             wstd = replay.weights_std[0][:-1]
             results[yname][n_layers].update({key_name: {'gradient': gstd, 'weights': wstd, 'ratio': gstd / wstd}})
+
+def plot(y=None, l=None, act=None, dist=None):
+    if y is None:
+        ys = ['y', 'y0', 'y1', 'yr']
+    else:
+        ys = [y]
+    if l is None:
+        ls = [5, 20, 50, 100]
+    else:
+        ls = [l]
+    if act is None:
+        acts = ['tanh', 'relu']
+    else:
+        acts = [act]
+    if dist is None:
+        dists = ['normal', 'uniform']
+    else:
+        dists = [dist]
+    return [((y, l, act, dist) , results[y][l]['{}_{}_{}'.format(act, 'glorot' if act == 'tanh' else 'he', dist)]['ratio'])
+            for y in ys for l in ls for act in acts for dist in dists]
+
+sub = plot(y='y', act='tanh', dist='uniform')
+
+for n, v in sub:
+    plt.plot(v, label=n)
+plt.legend()
