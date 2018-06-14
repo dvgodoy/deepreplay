@@ -126,7 +126,8 @@ class Replay(object):
         # Keras function to compute the gradients for trainable weights, given inputs, targets, weights and
         # sample weights
         self.__trainable_weights = [w for layer in self.model.layers
-                                    for w in layer.trainable_weights if layer.trainable]
+                                    for w in layer.trainable_weights
+                                    if layer.trainable and ('bias' not in w.op.name)]
         self.__trainable_gradients = self.model.optimizer.get_gradients(self.model.total_loss, self.__trainable_weights)
         self._get_gradients = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.targets +
                                                 self._model_weights + self.model.sample_weights,
@@ -270,6 +271,26 @@ class Replay(object):
     def gradients_violins(self):
         return self._gradients_plot, self._gradients_data
 
+    @staticmethod
+    def __calc_std(values):
+        return np.array([[layer.std() for layer in epoch] for epoch in values])
+
+    @property
+    def weights_std(self):
+        std = None
+        if self._weights_violins_data is not None:
+            weights = self._weights_violins_data.values
+            std = Replay.__calc_std(weights)
+        return std
+
+    @property
+    def gradients_std(self):
+        std = None
+        if self._gradients_data is not None:
+            gradients = self._gradients_data.values
+            std = Replay.__calc_std(gradients)
+        return std
+
     @property
     def training_loss(self):
         return self.group['loss'][:]
@@ -358,7 +379,8 @@ class Replay(object):
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
 
-        gradient_names = [layer.name for layer in self.model.layers for _ in layer.trainable_weights if layer.trainable]
+        gradient_names = [layer.name for layer in self.model.layers for w in layer.trainable_weights
+                          if layer.trainable and ('bias' not in w.op.name)]
         gradients = []
         # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end + 1):
@@ -377,11 +399,14 @@ class Replay(object):
 
         self._gradients_data = LayerViolinsData(names=gradient_names, values=gradients, layers=self.weights_layers,
                                                 selected_layers=layer_names)
-        self._gradients_plot = LayerViolins(ax, 'Gradients').load_data(self._gradients_data)
+        if ax is None:
+            self._gradients_plot = None
+        else:
+            self._gradients_plot = LayerViolins(ax, 'Gradients').load_data(self._gradients_data)
         return self._gradients_plot
 
-    def build_outputs_violins(self, ax, before_activation=False, layer_names=None, include_inputs=True,
-                              exclude_outputs=True, epoch_start=0, epoch_end=-1):
+    def build_outputs(self, ax, before_activation=False, layer_names=None, include_inputs=True,
+                      exclude_outputs=True, epoch_start=0, epoch_end=-1):
         """Builds a LayerViolins object to be used for plotting and
         animating.
 
@@ -438,7 +463,10 @@ class Replay(object):
             layer_names = ['inputs'] + layer_names
 
         data = LayerViolinsData(names=names, values=outputs, layers=self.z_act_layers, selected_layers=layer_names)
-        plot = LayerViolins(ax, title).load_data(data)
+        if ax is None:
+            plot = None
+        else:
+            plot = LayerViolins(ax, title).load_data(data)
         if before_activation:
             self._zvalues_violins_data = data
             self._zvalues_violins_plot = plot
@@ -447,7 +475,7 @@ class Replay(object):
             self._activations_violins_plot = plot
         return plot
 
-    def build_weights_violins(self, ax, layer_names=None, exclude_outputs=True, epoch_start=0, epoch_end=-1):
+    def build_weights(self, ax, layer_names=None, exclude_outputs=True, epoch_start=0, epoch_end=-1):
         """Builds a LayerViolins object to be used for plotting and
         animating.
 
@@ -475,14 +503,14 @@ class Replay(object):
             epoch_end = self.n_epochs
         epoch_end = min(epoch_end, self.n_epochs)
 
-        names = [layer.name for layer, weights in zip(self.model.layers, self.n_weights) for _ in weights
-                 if len(weights) in (1, 2)]
-        n_weights = [len(weights) for layer, weights in zip(self.model.layers, self.n_weights) for _ in weights]
+        names = [layer.name for layer, weights in zip(self.model.layers, self.n_weights) if len(weights) in (1, 2)]
+        n_weights = [(i, len(weights)) for layer, weights in zip(self.model.layers, self.n_weights) for i in weights]
 
         weights = []
         # For each epoch, uses the corresponding weights
         for epoch in range(epoch_start, epoch_end + 1):
-            weights.append([w for w, n in zip(self.weights[epoch], n_weights) if n in (1, 2)])
+            # takes only the weights (i == 0), not the biases (i == 1)
+            weights.append([w for w, (i, n) in zip(self.weights[epoch], n_weights) if (n in (1, 2)) and (i == 0)])
 
         if layer_names is None:
             layer_names = self.weights_layers
@@ -493,7 +521,10 @@ class Replay(object):
                                                       values=weights,
                                                       layers=self.weights_layers,
                                                       selected_layers=layer_names)
-        self._weights_violins_plot = LayerViolins(ax, 'Weights').load_data(self._weights_violins_data)
+        if ax is None:
+            self._weights_violins_plot = None
+        else:
+            self._weights_violins_plot = LayerViolins(ax, 'Weights').load_data(self._weights_violins_data)
         return self._weights_violins_plot
 
     def build_loss_histogram(self, ax, epoch_start=0, epoch_end=-1):
