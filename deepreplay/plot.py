@@ -3,10 +3,11 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import pandas as pd
 import seaborn as sns
 from collections import namedtuple
 from matplotlib import animation
-matplotlib.rcParams['animation.writer'] = 'ffmpeg'
+matplotlib.rcParams['animation.writer'] = 'avconv'
 sns.set_style('white')
 
 FeatureSpaceData = namedtuple('FeatureSpaceData', ['line', 'bent_line', 'prediction', 'target'])
@@ -14,6 +15,7 @@ FeatureSpaceLines = namedtuple('FeatureSpaceLines', ['grid', 'input', 'contour']
 LossAndMetricData = namedtuple('LossAndMetricData', ['loss', 'metric', 'metric_name'])
 ProbHistogramData = namedtuple('ProbHistogramData', ['prob', 'target'])
 LossHistogramData = namedtuple('LossHistogramData', ['loss'])
+LayerViolinsData = namedtuple('LayerViolinsData', ['names', 'values', 'layers', 'selected_layers'])
 
 def build_2d_grid(xlim, ylim, n_lines=11, n_points=1000):
     """Returns a 2D grid of boundaries given by `xlim` and `ylim`,
@@ -589,3 +591,44 @@ class LossHistogram(Basic):
         lh.ax.locator_params(tight=True, nbins=4)
 
         return lh.line
+
+class LayerViolins(Basic):
+    def __init__(self, ax, title):
+        super(LayerViolins, self).__init__(ax)
+        self.values = None
+        self.names = None
+        self._title = title
+
+    def load_data(self, layer_violins_data):
+        self.values = layer_violins_data.values
+        self.names = layer_violins_data.names
+        self.layers = ['inputs'] + layer_violins_data.layers
+        self.selected_layers = layer_violins_data.selected_layers
+        self.palette = dict(zip(self.layers, sns.palettes.husl_palette(len(self.layers), .7)))
+        self.n_epochs = len(self.values)
+        self._prepare_plot()
+        return self
+
+    def _prepare_plot(self):
+        self.line = self.ax.plot([], [])
+
+    @staticmethod
+    def _update(i, lv, epoch_start=0):
+        assert len(lv.names) == len(lv.values[i]), "Layer names and values have different lengths!"
+        epoch = i + epoch_start
+
+        df = pd.concat([pd.DataFrame(layer_values.ravel(),
+                                     columns=[layer_name]).melt(var_name='layers', value_name='values')
+                        for layer_name, layer_values in zip(lv.names, lv.values[i])])
+        df = df[df.isin({'layers': lv.selected_layers}).values]
+
+        lv.ax.clear()
+        sns.violinplot(data=df, x='layers', y='values', ax=lv.ax, cut=0, palette=lv.palette, scale='width')
+        lv.ax.set_xticklabels(df.layers.unique())
+        lv.ax.set_xlabel('Layers')
+        lv.ax.set_ylabel(lv._title)
+        lv.ax.set_ylim([df['values'].min(), df['values'].max()])
+        lv.ax.set_title('{} - Epoch: {}'.format(lv.title[0], epoch))
+
+        return lv.line
+

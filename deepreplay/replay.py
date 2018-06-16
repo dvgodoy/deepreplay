@@ -3,16 +3,25 @@ import numpy as np
 import h5py
 import keras.backend as K
 from keras.models import load_model
-from .plot import build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric
-from .plot import FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData
+from .plot import (
+    build_2d_grid, FeatureSpace, ProbabilityHistogram, LossHistogram, LossAndMetric, LayerViolins
+)
+from .plot import (
+    FeatureSpaceData, FeatureSpaceLines, ProbHistogramData, LossHistogramData, LossAndMetricData, LayerViolinsData
+)
+from .utils import make_batches, slice_arrays
+from itertools import groupby
+from operator import itemgetter
 
 TRAINING_MODE = 1
 TEST_MODE = 0
+ACTIVATIONS = ['softmax', 'relu', 'elu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear', 'softplus', 'softsign', 'selu']
+Z_OPS = ['BiasAdd', 'MatMul', 'Add', 'Sub', 'Mul', 'Maximum', 'Minimum', 'RealDiv', 'ExpandDims']
+
 
 class Replay(object):
     """Creates an instance of Replay, to process information collected
-    by the callback and generate data to feed the supported visualiza-
-    tions.
+    by the callback and generate data to feed the supported visualizations.
 
     Parameters
     ----------
@@ -46,30 +55,68 @@ class Replay(object):
         animating; namedtuple containing information about
         classification probabilities and targets.
 
+    weights_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about weights values
+        per layer.
+
+    activations_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about activation values
+        per layer.
+
+    zvalues_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about Z-values per layer.
+
+    gradients_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about gradient values
+        per layer.
+
+    weights_std: ndarray
+        Standard deviation of the weights per layer.
+
+    gradients_std: ndarray
+        Standard deivation of the gradients per layer.
+
     training_loss: ndarray
         An array of shape (n_epochs, ) with training loss as reported
         by Keras at the end of each epoch.
+
+    learning_rate: ndarray
+        An array of shape (n_epochs, ) with learning rate as reported
+        by Keras at the beginning of each epoch.
     """
     def __init__(self, replay_filename, group_name, model_filename=''):
         # Set learning phase to TEST
         self.learning_phase = TEST_MODE
 
+        # Loads ReplayData file
+        self.replay_data = h5py.File('{}'.format(replay_filename), 'r')
+        try:
+            self.group = self.replay_data[group_name]
+        except KeyError:
+            self.group = self.replay_data[group_name + '_init']
+            group_name += '_init'
+
+        self.group_name = group_name
+
         # If not informed, defaults to '_model' suffix
         if model_filename == '':
             model_filename = '{}_model.h5'.format(group_name)
-
         # Loads Keras model
         self.model = load_model(model_filename)
-        # Loads ReplayData file
-        self.replay_data = h5py.File('{}'.format(replay_filename), 'r')
-        self.group_name = group_name
-        self.group = self.replay_data[self.group_name]
 
         # Retrieves some basic information from the replay data
         self.inputs = self.group['inputs'][:]
         self.targets = self.group['targets'][:]
         self.n_epochs = self.group.attrs['n_epochs']
         self.n_layers = self.group.attrs['n_layers']
+
+        # Generates ranges for the number of different weight arrays in each layer
+        self.n_weights = [range(len(self.group['layer{}'.format(l)])) for l in range(self.n_layers)]
+
         # Retrieves weights as a list, each element being one epoch
         self.weights = self._retrieve_weights()
 
@@ -92,26 +139,104 @@ class Replay(object):
                                                    outputs=[K.binary_crossentropy(self.model.targets[0],
                                                                                   self.model.outputs[0])])
 
+        # Keras function to compute the gradients for trainable weights, given inputs, targets, weights and
+        # sample weights
+        self.__trainable_weights = [w for layer in self.model.layers
+                                    for w in layer.trainable_weights
+                                    if layer.trainable and ('bias' not in w.op.name)]
+        self.__trainable_gradients = self.model.optimizer.get_gradients(self.model.total_loss, self.__trainable_weights)
+        self._get_gradients = K.function(inputs=[K.learning_phase()] + self.model.inputs + self.model.targets +
+                                                self._model_weights + self.model.sample_weights,
+                                         outputs=self.__trainable_gradients)
+
+        def get_z_op(layer):
+            op = layer.output.op
+            if op.type in Z_OPS:
+                return layer.output
+            else:
+                op_layer_name = op.name.split('/')[0]
+                for input in op.inputs:
+                    input_layer_name = input.name.split('/')[0]
+                    if (input.op.type in Z_OPS) and (op_layer_name == input_layer_name):
+                        return input
+                return None
+
+        __z_layers = np.array([i for i, layer in enumerate(self.model.layers) if get_z_op(layer) is not None])
+        __act_layers = np.array([i for i, layer in enumerate(self.model.layers)
+                               if layer.output.op.type.lower() in ACTIVATIONS])
+        __z_layers = np.array([__z_layers[np.argmax(layer < __z_layers) - 1] for layer in __act_layers])
+        self.z_act_layers = [self.model.layers[i].name for i in __z_layers]
+
+        self._z_layers = ['inputs'] + [self.model.layers[i].name for i in __z_layers]
+        self._z_tensors = self.model.inputs + list(filter(lambda t: t is not None,
+                                                          [get_z_op(self.model.layers[i]) for i in __z_layers]))
+
+        self._activation_layers = ['inputs'] + [self.model.layers[i].name for i in __act_layers]
+        self._activation_tensors = self.model.inputs + [self.model.layers[i].output for i in __act_layers]
+
+        # Keras function to compute the Z values given inputs and weights
+        self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
+                                       outputs=self._z_tensors)
+        # Keras function to compute the activation values given inputs and weights
+        self._get_activations = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
+                                           outputs=self._activation_tensors)
+
+        # Gets names of all layers with arrays of weights of lengths 1 (no biases) or 2 (with biases)
+        # Layers without weights (e.g. Activation, BatchNorm) are not included
+        self.weights_layers = [layer.name for layer, weights in zip(self.model.layers, self.n_weights)
+                               if len(weights) in (1, 2)]
+
         # Attributes for the visualizations - Data
         self._feature_space_data = None
         self._loss_hist_data = None
         self._loss_and_metric_data = None
         self._prob_hist_data = None
         self._decision_boundary_data = None
+        self._weights_violins_data = None
+        self._activations_violins_data = None
+        self._zvalues_violins_data = None
+        self._gradients_data = None
         # Attributes for the visualizations - Plot objects
         self._feature_space_plot = None
         self._loss_hist_plot = None
         self._loss_and_metric_plot = None
         self._prob_hist_plot = None
         self._decision_boundary_plot = None
+        self._weights_violins_plot = None
+        self._activations_violins_plot = None
+        self._zvalues_violins_plot = None
+        self._gradients_plot = None
+
+    def _make_batches(self, seed):
+        inputs = self.inputs[:]
+        targets = self.targets[:]
+
+        np.random.seed(seed)
+        np.random.shuffle(inputs)
+        np.random.shuffle(targets)
+        num_training_samples = inputs.shape[0]
+
+        batches = make_batches(num_training_samples, self.params['batch_size'])
+        index_array = np.arange(num_training_samples)
+
+        inputs_batches = []
+        targets_batches = []
+        for batch_index, (batch_start, batch_end) in enumerate(batches):
+            batch_ids = index_array[batch_start:batch_end]
+            inputs_batch, targets_batch = slice_arrays([inputs, targets], batch_ids)
+            inputs_batches.append(inputs_batch)
+            targets_batches.append(targets_batch)
+
+        return inputs_batches, targets_batches
+
+    @staticmethod
+    def __assign_gradients_to_layers(layers, gradients):
+        return [list(list(zip(*g))[1]) for k, g in groupby(zip(layers, gradients), itemgetter(0))]
 
     def _retrieve_weights(self):
-        # Generates ranges for the number of different weight arrays in each layer
-        n_weights = [range(len(self.group['layer{}'.format(l)]))
-                     for l in range(self.n_layers)]
         # Retrieves weights for each layer and sequence of weights
         weights = [np.array(self.group['layer{}'.format(l)]['weights{}'.format(w)])
-                   for l, ws in enumerate(n_weights)
+                   for l, ws in enumerate(self.n_weights)
                    for w in ws]
         # Since initial weights are also saved, there are n_epochs + 1 elements in total
         return [[w[epoch] for w in weights] for epoch in range(self.n_epochs + 1)]
@@ -147,8 +272,48 @@ class Replay(object):
         return self._prob_hist_plot, self._prob_hist_data
 
     @property
+    def weights_violins(self):
+        return self._weights_violins_plot, self._weights_violins_data
+
+    @property
+    def activations_violins(self):
+        return self._activations_violins_plot, self._activations_violins_data
+
+    @property
+    def zvalues_violins(self):
+        return self._zvalues_violins_plot, self._zvalues_violins_data
+
+    @property
+    def gradients_violins(self):
+        return self._gradients_plot, self._gradients_data
+
+    @staticmethod
+    def __calc_std(values):
+        return np.array([[layer.std() for layer in epoch] for epoch in values])
+
+    @property
+    def weights_std(self):
+        std = None
+        if self._weights_violins_data is not None:
+            weights = self._weights_violins_data.values
+            std = Replay.__calc_std(weights)
+        return std
+
+    @property
+    def gradients_std(self):
+        std = None
+        if self._gradients_data is not None:
+            gradients = self._gradients_data.values
+            std = Replay.__calc_std(gradients)
+        return std
+
+    @property
     def training_loss(self):
         return self.group['loss'][:]
+
+    @property
+    def learning_rate(self):
+        return self.group['lr'][:]
 
     def get_training_metric(self, metric_name):
         """Returns corresponding metric as reported by Keras at the
@@ -201,6 +366,182 @@ class Replay(object):
             probas.append(self._predict_proba(self.inputs, weights)[0])
         probas = np.array(probas)
         return probas
+
+    def build_gradients(self, ax, layer_names=None, exclude_outputs=True, epoch_start=0, epoch_end=-1):
+        """Builds a LayerViolins object to be used for plotting and
+        animating.
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        layer_names: list of Strings, optional
+            If informed, plots only the listed layers.
+        exclude_outputs: boolean, optional
+            If True, excludes distribution of output layer. Default is True.
+            If `layer_names` is informed, `exclude_outputs` is ignored.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        gradients_plot: LayerViolins
+            An instance of a LayerViolins object to make plots and
+            animations.
+        """
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        gradient_names = [layer.name for layer in self.model.layers for w in layer.trainable_weights
+                          if layer.trainable and ('bias' not in w.op.name)]
+        gradients = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            weights = self.weights[epoch]
+
+            # Sample weights fixed to one!
+            inputs = [self.learning_phase, self.inputs, self.targets] + weights + [np.ones(shape=self.inputs.shape[0])]
+            grad = [w for v in Replay.__assign_gradients_to_layers(gradient_names, self._get_gradients(inputs=inputs))
+                    for w in v]
+            gradients.append(grad)
+
+        if layer_names is None:
+            layer_names = self.weights_layers
+            if exclude_outputs:
+                layer_names = layer_names[:-1]
+
+        self._gradients_data = LayerViolinsData(names=gradient_names, values=gradients, layers=self.weights_layers,
+                                                selected_layers=layer_names)
+        if ax is None:
+            self._gradients_plot = None
+        else:
+            self._gradients_plot = LayerViolins(ax, 'Gradients').load_data(self._gradients_data)
+        return self._gradients_plot
+
+    def build_outputs(self, ax, before_activation=False, layer_names=None, include_inputs=True,
+                      exclude_outputs=True, epoch_start=0, epoch_end=-1):
+        """Builds a LayerViolins object to be used for plotting and
+        animating.
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        before_activation: Boolean, optional
+            If True, returns Z-values, that is, before applying
+            the activation function.
+        layer_names: list of Strings, optional
+            If informed, plots only the listed layers.
+        include_inputs: boolean, optional
+            If True, includes distribution of inputs. Default is True.
+        exclude_outputs: boolean, optional
+            If True, excludes distribution of output layer. Default is True.
+            If `layer_names` is informed, `exclude_outputs` is ignored.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        activations_violins_plot/zvalues_violins_plot: LayerViolins
+            An instance of a LayerViolins object to make plots and
+            animations.
+        """
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        if before_activation:
+            title = 'Z-values'
+            names = self._z_layers
+        else:
+            title = 'Activations'
+            names = self._activation_layers
+        outputs = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            weights = self.weights[epoch]
+            inputs = [self.learning_phase, self.inputs] + weights
+            if before_activation:
+                outputs.append(self._get_zvalues(inputs=inputs))
+            else:
+                outputs.append(self._get_activations(inputs=inputs))
+
+        if layer_names is None:
+            layer_names = self.z_act_layers
+            if exclude_outputs:
+                layer_names = layer_names[:-1]
+        if include_inputs:
+            layer_names = ['inputs'] + layer_names
+
+        data = LayerViolinsData(names=names, values=outputs, layers=self.z_act_layers, selected_layers=layer_names)
+        if ax is None:
+            plot = None
+        else:
+            plot = LayerViolins(ax, title).load_data(data)
+        if before_activation:
+            self._zvalues_violins_data = data
+            self._zvalues_violins_plot = plot
+        else:
+            self._activations_violins_data = data
+            self._activations_violins_plot = plot
+        return plot
+
+    def build_weights(self, ax, layer_names=None, exclude_outputs=True, epoch_start=0, epoch_end=-1):
+        """Builds a LayerViolins object to be used for plotting and
+        animating.
+
+        Parameters
+        ----------
+        ax: AxesSubplot
+            Subplot of a Matplotlib figure.
+        layer_names: list of Strings, optional
+            If informed, plots only the listed layers.
+        exclude_outputs: boolean, optional
+            If True, excludes distribution of output layer. Default is True.
+            If `layer_names` is informed, `exclude_outputs` is ignored.
+        epoch_start: int, optional
+            First epoch to consider.
+        epoch_end: int, optional
+            Last epoch to consider.
+
+        Returns
+        -------
+        weights_violins_plot: LayerViolins
+            An instance of a LayerViolins object to make plots and
+            animations.
+        """
+        if epoch_end == -1:
+            epoch_end = self.n_epochs
+        epoch_end = min(epoch_end, self.n_epochs)
+
+        names = [layer.name for layer, weights in zip(self.model.layers, self.n_weights) if len(weights) in (1, 2)]
+        n_weights = [(i, len(weights)) for layer, weights in zip(self.model.layers, self.n_weights) for i in weights]
+
+        weights = []
+        # For each epoch, uses the corresponding weights
+        for epoch in range(epoch_start, epoch_end + 1):
+            # takes only the weights (i == 0), not the biases (i == 1)
+            weights.append([w for w, (i, n) in zip(self.weights[epoch], n_weights) if (n in (1, 2)) and (i == 0)])
+
+        if layer_names is None:
+            layer_names = self.weights_layers
+            if exclude_outputs:
+                layer_names = layer_names[:-1]
+
+        self._weights_violins_data = LayerViolinsData(names=names,
+                                                      values=weights,
+                                                      layers=self.weights_layers,
+                                                      selected_layers=layer_names)
+        if ax is None:
+            self._weights_violins_plot = None
+        else:
+            self._weights_violins_plot = LayerViolins(ax, 'Weights').load_data(self._weights_violins_data)
+        return self._weights_violins_plot
 
     def build_loss_histogram(self, ax, epoch_start=0, epoch_end=-1):
         """Builds a LossHistogram object to be used for plotting and
