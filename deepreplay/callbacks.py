@@ -31,6 +31,14 @@ class ReplayData(Callback):
         Group inside the HDF5 file where the information is to be
         saved. If the informed group name already exists, it will throw
         an exception.
+    model: Keras Model, optional
+        If provided, it will set the model directly to the callback
+        instance and execute `on_train_begin` method to initialize
+        all variables and create the corresponding group in the HDF5
+        file.
+        This is intended to be used for analyzing the initial conditions
+        of the model without ever calling its `fit` function, where
+        the callback is usually called.
     """
     def __init__(self, inputs, targets, filename, group_name, model=None):
         super(ReplayData, self).__init__()

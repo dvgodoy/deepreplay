@@ -1,6 +1,6 @@
 import numpy as np
 
-def load_data(n_dims=10, n_points=1000, only_sphere=False, shuffle=True, seed=13):
+def load_data(n_dims=10, n_points=1000, classif_radius_fraction=0.5, only_sphere=False, shuffle=True, seed=13):
     """
 
     Parameters
@@ -9,6 +9,11 @@ def load_data(n_dims=10, n_points=1000, only_sphere=False, shuffle=True, seed=13
         Number of dimensions of the n-ball. Default is 10.
     n_points: int, optional
         Number of points in each parabola. Default is 1,000.
+    classif_radius_fraction: float, optional
+        Points farther away from the center than
+        `classification_radius_fraction * ball radius` are
+        considered to be positive cases. The remaining
+        points are the negative cases.
     only_sphere: boolean
         If True, generates a n-sphere, that is, a hollow n-ball.
         Default is False.
@@ -37,7 +42,7 @@ def load_data(n_dims=10, n_points=1000, only_sphere=False, shuffle=True, seed=13
     radius *= adjustment
     X *= adjustment
 
-    y = (np.abs(np.sum(X, axis=1)) > (radius / 2.0)).astype(np.int)
+    y = (np.abs(np.sum(X, axis=1)) > (radius * classif_radius_fraction)).astype(np.int)
 
     # But we must not feed the network with neatly organized inputs...
     # so let's randomize them

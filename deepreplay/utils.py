@@ -1,5 +1,11 @@
+# These functions were extracted from Keras to assure there will
+# be no break in compatibility with DeepReplay's code.
+
 def make_batches(size, batch_size):
-    """Returns a list of batch indices (tuples of indices).
+    """Function extracted from Keras - check keras.engine.training_utils
+    for the original version.
+
+    Returns a list of batch indices (tuples of indices).
     # Arguments
         size: Integer, total size of the data to slice into batches.
         batch_size: Integer, batch size.
@@ -11,7 +17,10 @@ def make_batches(size, batch_size):
             for i in range(num_batches)]
 
 def slice_arrays(arrays, start=None, stop=None):
-    """Slices an array or list of arrays.
+    """ Function extracted from Keras - check keras.utils.generic_utils
+    for the original version.
+
+    Slices an array or list of arrays.
     This takes an array-like, or a list of
     array-likes, and outputs:
         - arrays[start:stop] if `arrays` is an array-like

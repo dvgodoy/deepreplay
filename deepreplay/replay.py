@@ -16,13 +16,12 @@ from operator import itemgetter
 TRAINING_MODE = 1
 TEST_MODE = 0
 ACTIVATIONS = ['softmax', 'relu', 'elu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear', 'softplus', 'softsign', 'selu']
-Z_OPS = ['BiasAdd', 'MatMul', 'Add']
+Z_OPS = ['BiasAdd', 'MatMul', 'Add', 'Sub', 'Mul', 'Maximum', 'Minimum', 'RealDiv', 'ExpandDims']
 
 
 class Replay(object):
     """Creates an instance of Replay, to process information collected
-    by the callback and generate data to feed the supported visualiza-
-    tions.
+    by the callback and generate data to feed the supported visualizations.
 
     Parameters
     ----------
@@ -56,13 +55,30 @@ class Replay(object):
         animating; namedtuple containing information about
         classification probabilities and targets.
 
-    weights_violins:
+    weights_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about weights values
+        per layer.
 
-    activations_violins:
+    activations_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about activation values
+        per layer.
 
-    zvalues_violins:
+    zvalues_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about Z-values per layer.
 
-    gradients_violins:
+    gradients_violins: (LayerViolins, LayerViolinsData)
+        LayerViolins object to be used for plotting and animating;
+        namedtuple containing information about gradient values
+        per layer.
+
+    weights_std: ndarray
+        Standard deviation of the weights per layer.
+
+    gradients_std: ndarray
+        Standard deivation of the gradients per layer.
 
     training_loss: ndarray
         An array of shape (n_epochs, ) with training loss as reported

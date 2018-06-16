@@ -35,6 +35,14 @@ deepreplay\.replay module
     :undoc-members:
     :show-inheritance:
 
+deepreplay\.utils module
+------------------------
+
+.. automodule:: deepreplay.utils
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Module contents
 ---------------
