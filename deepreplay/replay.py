@@ -1,5 +1,4 @@
 from __future__ import division
-import tensorflow as tf
 import numpy as np
 import h5py
 import keras.backend as K
@@ -169,11 +168,11 @@ class Replay(object):
         self.z_act_layers = [self.model.layers[i].name for i in __z_layers]
 
         self._z_layers = ['inputs'] + [self.model.layers[i].name for i in __z_layers]
-        self._z_tensors = [tf.identity(self.model.inputs)] + list(filter(lambda t: t is not None,
+        self._z_tensors = [K.identity(self.model.inputs)] + list(filter(lambda t: t is not None,
                                                           [get_z_op(self.model.layers[i]) for i in __z_layers]))
 	
         self._activation_layers = ['inputs'] + [self.model.layers[i].name for i in __act_layers]
-        self._activation_tensors = [tf.identity(self.model.inputs)] + [self.model.layers[i].output for i in __act_layers]
+        self._activation_tensors = [K.identity(self.model.inputs)] + [self.model.layers[i].output for i in __act_layers]
 
         # Keras function to compute the Z values given inputs and weights
         self._get_zvalues = K.function(inputs=[K.learning_phase()] + self.model.inputs + self._model_weights,
