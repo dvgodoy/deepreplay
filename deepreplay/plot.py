@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 from collections import namedtuple
 from matplotlib import animation
-matplotlib.rcParams['animation.writer'] = 'avconv'
+matplotlib.rcParams['animation.writer'] = 'ffmpeg'
 sns.set_style('white')
 
 FeatureSpaceData = namedtuple('FeatureSpaceData', ['line', 'bent_line', 'prediction', 'target'])
