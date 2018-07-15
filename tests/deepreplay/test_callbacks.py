@@ -38,6 +38,7 @@ def training_data(tmpdir_factory):
 
     replaydata = ReplayData(X, y, filename=filename, group_name='part1_activation_functions')
 
+    np.random.seed(13)
     model = Sequential()
     model.add(Dense(input_dim=2,
                     units=2,
