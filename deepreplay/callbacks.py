@@ -106,7 +106,10 @@ class ReplayData(Callback):
 
         self.group.create_dataset('loss', shape=(self.n_epochs,), dtype='f')
         for metric in self.model.metrics:
-            self.group.create_dataset(metric, shape=(self.n_epochs,), dtype='f')
+            metric_name = metric
+            if callable(metric):
+                metric_name = metric.__name__
+            self.group.create_dataset(metric_name, shape=(self.n_epochs,), dtype='f')
 
         self.group.create_dataset('lr', shape=(self.n_epochs,), dtype='f')
 
@@ -133,5 +136,8 @@ class ReplayData(Callback):
         self._append_weights()
         self.group['loss'][epoch] = logs.get('loss')
         for metric in self.model.metrics:
-            self.group[metric][epoch] = logs.get(metric, np.nan)
+            metric_name = metric
+            if callable(metric):
+                metric_name = metric.__name__
+            self.group[metric_name][epoch] = logs.get(metric_name, np.nan)
         return

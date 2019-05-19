@@ -23,6 +23,8 @@ def training_data(tmpdir_factory):
     from keras.models import Sequential
     from keras.optimizers import SGD
     from keras.initializers import glorot_normal, normal
+    from keras.metrics import binary_accuracy
+    from keras.losses import binary_crossentropy
 
     from deepreplay.datasets.parabola import load_data
     from deepreplay.callbacks import ReplayData
@@ -51,9 +53,9 @@ def training_data(tmpdir_factory):
                     activation='sigmoid',
                     name='output'))
 
-    model.compile(loss='binary_crossentropy',
+    model.compile(loss=binary_crossentropy,
                   optimizer=sgd,
-                  metrics=['acc'])
+                  metrics=[binary_accuracy])
 
     model.fit(X, y, epochs=20, batch_size=16, callbacks=[replaydata])
 
@@ -77,4 +79,4 @@ def test_weights(replay_data, training_data):
 def test_metrics(replay_data, training_data, model_data):
     npt.assert_allclose(replay_data['loss'], training_data['loss'], atol=1e-3)
     for metric in model_data.metrics:
-        npt.assert_allclose(replay_data[metric], training_data[metric], atol=1e-3)
+        npt.assert_allclose(replay_data[metric], training_data['binary_accuracy'], atol=1e-3)
