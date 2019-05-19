@@ -108,7 +108,7 @@ class ReplayData(Callback):
         for metric in self.model.metrics:
             metric_name = metric
             if callable(metric):
-                metric_name = metric.__name__
+                metric_name = metric.name if hasattr(metric, 'name') else metric.__name__
             self.group.create_dataset(metric_name, shape=(self.n_epochs,), dtype='f')
 
         self.group.create_dataset('lr', shape=(self.n_epochs,), dtype='f')
@@ -138,6 +138,6 @@ class ReplayData(Callback):
         for metric in self.model.metrics:
             metric_name = metric
             if callable(metric):
-                metric_name = metric.__name__
+                metric_name = metric.name if hasattr(metric, 'name') else metric.__name__
             self.group[metric_name][epoch] = logs.get(metric_name, np.nan)
         return
